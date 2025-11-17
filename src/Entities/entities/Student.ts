@@ -1,4 +1,12 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  Entity,
+  Index,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from "typeorm";
+import { AssignmentSubmission } from "./AssignmentSubmission";
+import { CourseRating } from "./CourseRating";
 
 @Index("student_email_key", ["email"], { unique: true })
 @Index("users_pkey", ["id"], { unique: true })
@@ -45,4 +53,13 @@ export class Student {
 
   @Column("timestamp without time zone", { name: "created_at", nullable: true })
   createdAt: Date | null;
+
+  @OneToMany(
+    () => AssignmentSubmission,
+    (assignmentSubmission) => assignmentSubmission.student
+  )
+  assignmentSubmissions: AssignmentSubmission[];
+
+  @OneToMany(() => CourseRating, (courseRating) => courseRating.student)
+  courseRatings: CourseRating[];
 }

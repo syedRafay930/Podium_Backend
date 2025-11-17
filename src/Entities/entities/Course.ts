@@ -4,11 +4,15 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
+import { Assignment } from "./Assignment";
 import { CourseCategory } from "./CourseCategory";
 import { Admin } from "./Admin";
 import { Teacher } from "./Teacher";
+import { CourseRating } from "./CourseRating";
+import { Lecture } from "./Lecture";
 
 @Index("course_pkey", ["id"], { unique: true })
 @Entity("course", { schema: "public" })
@@ -35,6 +39,9 @@ export class Course {
   @Column("timestamp without time zone", { name: "created_at", nullable: true })
   createdAt: Date | null;
 
+  @OneToMany(() => Assignment, (assignment) => assignment.course)
+  assignments: Assignment[];
+
   @ManyToOne(() => CourseCategory, (courseCategory) => courseCategory.courses)
   @JoinColumn([{ name: "course_category_id", referencedColumnName: "id" }])
   courseCategory: CourseCategory;
@@ -46,4 +53,10 @@ export class Course {
   @ManyToOne(() => Teacher, (teacher) => teacher.courses)
   @JoinColumn([{ name: "teacher_id", referencedColumnName: "id" }])
   teacher: Teacher;
+
+  @OneToMany(() => CourseRating, (courseRating) => courseRating.course)
+  courseRatings: CourseRating[];
+
+  @OneToMany(() => Lecture, (lecture) => lecture.course)
+  lectures: Lecture[];
 }
