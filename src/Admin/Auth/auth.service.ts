@@ -54,7 +54,7 @@ export class AuthService {
       sub: user.email,
       first_name: (user.firstName || 'DefaultFirstName'),
       last_name: (user.lastName || 'DefaultLastName'),
-      student_id: user.id,
+      admin_id: user.id,
     };
     return this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),

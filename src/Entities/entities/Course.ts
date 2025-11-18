@@ -52,7 +52,7 @@ export class Course {
 
   @ManyToOne(() => Teacher, (teacher) => teacher.courses)
   @JoinColumn([{ name: "teacher_id", referencedColumnName: "id" }])
-  teacher: Teacher;
+  teacher: Teacher | null;
 
   @OneToMany(() => CourseRating, (courseRating) => courseRating.course)
   courseRatings: CourseRating[];

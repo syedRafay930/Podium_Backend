@@ -13,7 +13,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot_password.dto';
 import { ResetPasswordDto } from './dto/reset_password.dto';
 import { SignUpDto } from './dto/sign_up.dto';
-import { JwtBlacklistGuard } from './guards/jwt.guard';
+import { StdJwtBlacklistGuard } from './guards/jwt.guard';
 
 //import { RBACService } from '../RBAC/rbac.service';
 //import { FirebaseService } from 'src/firebase/firebase.service';
@@ -65,7 +65,7 @@ export class AuthController {
     return this.authService.resetPassword(token, newPassword);
   }
 
-  @UseGuards(JwtBlacklistGuard)
+  @UseGuards(StdJwtBlacklistGuard)
   @Post('logout')
   async logout(@Request() req) {
     const token = req.headers.authorization?.split(' ')[1];

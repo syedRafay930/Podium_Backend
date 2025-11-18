@@ -7,11 +7,11 @@ import { AuthGuard } from '@nestjs/passport';
 import { RedisService } from '../redis.service';
 
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {}
+export class StdJwtAuthGuard extends AuthGuard('jwt') {}
 
 // Custom guard with blacklist check
 @Injectable()
-export class JwtBlacklistGuard extends JwtAuthGuard {
+export class StdJwtBlacklistGuard extends StdJwtAuthGuard {
   constructor(private readonly redisService: RedisService) {
     super();
   }

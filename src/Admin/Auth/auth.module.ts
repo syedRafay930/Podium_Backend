@@ -7,15 +7,15 @@ import { JwtStrategy } from './jwt.strategy';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from './redis.service';
 import { MailModule } from 'src/Nodemailer/mailer.module';
-import { Student } from 'src/Entities/entities/Student';
+import { Admin} from 'src/Entities/entities/Admin';
 import { TypeOrmModule } from '@nestjs/typeorm';
 //import { RBACModule } from '../RBAC/rbac.module';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Student]),
+    TypeOrmModule.forFeature([Admin]),
     forwardRef(() => UsersModule),
     //forwardRef(() => RBACModule),
-    //MailModule,
+    MailModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({

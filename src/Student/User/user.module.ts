@@ -7,9 +7,10 @@ import { RedisModule } from '@nestjs-modules/ioredis';
 import { AuthModule } from '../Auth/auth.module';
 //import { MailModule } from 'src/Nodemailer/mailer.module';
 import { Student } from 'src/Entities/entities/Student';
+import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Student]),
+    TypeOrmModule.forFeature([Student, AssignmentSubmission]),
     JwtModule.register({}),
     RedisModule,
     //MailModule,

@@ -17,7 +17,7 @@ import { JwtBlacklistGuard } from './guards/jwt.guard';
 //import { RBACService } from '../RBAC/rbac.service';
 //import { FirebaseService } from 'src/firebase/firebase.service';
 
-@Controller('auth')
+@Controller('admin/auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

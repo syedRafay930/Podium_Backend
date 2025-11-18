@@ -3,7 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../User/user.module';
-import { JwtStrategy } from './jwt.strategy';
+import { StdJwtStrategy } from './jwt.strategy';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from './redis.service';
 import { MailModule } from 'src/Nodemailer/mailer.module';
@@ -15,7 +15,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     TypeOrmModule.forFeature([Student]),
     forwardRef(() => UsersModule),
     //forwardRef(() => RBACModule),
-    //MailModule,
+    MailModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -24,7 +24,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy , RedisService],
+  providers: [AuthService, StdJwtStrategy , RedisService],
   controllers: [AuthController],
   exports: [RedisService , JwtModule, AuthService]
 })
