@@ -20,7 +20,6 @@ export class CourseController {
   @UseGuards(JwtBlacklistGuard)
   @Post('create')
   async createCourse(@Request() req, @Body() courseDto: AddCourseDto) {
-    console.log(req.user);
     return this.courseService.createCourse(courseDto, req.user.admin_id);
   }
 

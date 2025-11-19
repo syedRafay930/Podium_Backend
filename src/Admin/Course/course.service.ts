@@ -6,13 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ConfigService } from '@nestjs/config';
 import { Course } from 'src/Entities/entities/Course';
 import { Admin } from 'src/Entities/entities/Admin';
 import { Teacher } from 'src/Entities/entities/Teacher';
 import { CourseCategory } from 'src/Entities/entities/CourseCategory';
 import { AddCourseDto } from './dto/add_course.dto';
 import { DeepPartial } from 'typeorm';
+import { CourseRating } from 'src/Entities/entities/CourseRating';
 
 @Injectable()
 export class CourseService {
@@ -69,21 +69,40 @@ export class CourseService {
   ) {
     const query = this.courseRepository
       .createQueryBuilder('course')
-      .leftJoinAndSelect('course.courseCategory', 'courseCategory')
-      .leftJoinAndSelect('course.teacher', 'teacher');
+      .leftJoin('course.createdBy', 'admin')
+      .addSelect(['admin.id', 'admin.firstName', 'admin.lastName'])
+      .leftJoin('course.courseCategory', 'courseCategory')
+      .addSelect(['courseCategory.id', 'courseCategory.name'])
+      .leftJoin('course.teacher', 'teacher')
+      .addSelect(['teacher.id', 'teacher.firstName', 'teacher.lastName'])
+      .addSelect((subQuery) => {
+        return subQuery
+          .select('AVG(courseRating.rating)', 'avgRating')
+          .from(CourseRating, 'courseRating')
+          .where('courseRating.course_id = course.id');
+      }, 'avgRating');
 
     if (category) {
       query.andWhere('courseCategory.id = :category', { category });
     }
 
     if (search) {
-      query.andWhere('course.courseName ILIKE :search', { search: `%${search}%` });
+      query.andWhere('course.courseName ILIKE :search', {
+        search: `%${search}%`,
+      });
     }
 
-    const [courses, total] = await query
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+    query.skip((page - 1) * limit).take(limit);
+
+    const { entities, raw } = await query.getRawAndEntities();
+    const courses = entities.map((course, idx) => ({
+      ...course,
+      avgRating: raw[idx].avgRating ? parseFloat(raw[idx].avgRating) : 0,
+    }));
+
+    const total = await this.courseRepository
+      .createQueryBuilder('course')
+      .getCount();
 
     return {
       data: courses,
