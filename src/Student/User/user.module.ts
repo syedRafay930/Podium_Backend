@@ -8,11 +8,13 @@ import { AuthModule } from '../Auth/auth.module';
 //import { MailModule } from 'src/Nodemailer/mailer.module';
 import { Student } from 'src/Entities/entities/Student';
 import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
+import { CourseModule } from 'src/Admin/Course/course.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Student, AssignmentSubmission]),
     JwtModule.register({}),
     RedisModule,
+    CourseModule,
     //MailModule,
     forwardRef(() => AuthModule),
   ],

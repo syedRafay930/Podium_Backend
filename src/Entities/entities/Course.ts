@@ -12,6 +12,7 @@ import { CourseCategory } from "./CourseCategory";
 import { Admin } from "./Admin";
 import { Teacher } from "./Teacher";
 import { CourseRating } from "./CourseRating";
+import { EnrolledCourses } from "./EnrolledCourses";
 import { Lecture } from "./Lecture";
 
 @Index("course_pkey", ["id"], { unique: true })
@@ -39,6 +40,9 @@ export class Course {
   @Column("timestamp without time zone", { name: "created_at", nullable: true })
   createdAt: Date | null;
 
+  @Column("text", { name: "cover_img", nullable: true })
+  coverImg: string | null;
+
   @OneToMany(() => Assignment, (assignment) => assignment.course)
   assignments: Assignment[];
 
@@ -56,6 +60,9 @@ export class Course {
 
   @OneToMany(() => CourseRating, (courseRating) => courseRating.course)
   courseRatings: CourseRating[];
+
+  @OneToMany(() => EnrolledCourses, (enrolledCourses) => enrolledCourses.course)
+  enrolledCourses: EnrolledCourses[];
 
   @OneToMany(() => Lecture, (lecture) => lecture.course)
   lectures: Lecture[];
