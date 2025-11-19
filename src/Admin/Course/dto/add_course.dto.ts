@@ -34,4 +34,8 @@ export class AddCourseDto {
   @IsNumber()
   TeacherId: number;
 
+  @IsNotEmpty()
+  @IsString()
+  CoverImg: string;
+
 }

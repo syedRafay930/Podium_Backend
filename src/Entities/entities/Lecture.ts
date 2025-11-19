@@ -47,7 +47,7 @@ export class Lecture {
   @Column("integer", { name: "lecture_number", nullable: true })
   lectureNumber: number | null;
 
-  @Column("integer", { name: "duration", nullable: true })
+  @Column("real", { name: "duration", nullable: true, precision: 24 })
   duration: number | null;
 
   @Column("boolean", { name: "is_recorded", nullable: true })

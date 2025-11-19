@@ -7,6 +7,7 @@ import {
 } from "typeorm";
 import { AssignmentSubmission } from "./AssignmentSubmission";
 import { CourseRating } from "./CourseRating";
+import { EnrolledCourses } from "./EnrolledCourses";
 
 @Index("student_email_key", ["email"], { unique: true })
 @Index("users_pkey", ["id"], { unique: true })
@@ -62,4 +63,10 @@ export class Student {
 
   @OneToMany(() => CourseRating, (courseRating) => courseRating.student)
   courseRatings: CourseRating[];
+
+  @OneToMany(
+    () => EnrolledCourses,
+    (enrolledCourses) => enrolledCourses.student
+  )
+  enrolledCourses: EnrolledCourses[];
 }

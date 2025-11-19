@@ -13,6 +13,7 @@ import { CourseCategory } from 'src/Entities/entities/CourseCategory';
 import { AddCourseDto } from './dto/add_course.dto';
 import { DeepPartial } from 'typeorm';
 import { CourseRating } from 'src/Entities/entities/CourseRating';
+import { Lecture } from 'src/Entities/entities/Lecture';
 
 @Injectable()
 export class CourseService {
@@ -25,6 +26,10 @@ export class CourseService {
     private readonly teacherRepository: Repository<Teacher>,
     @InjectRepository(CourseCategory)
     private readonly courseCategoryRepository: Repository<CourseCategory>,
+    @InjectRepository(CourseRating)
+    private readonly courseRatingRepository: Repository<CourseRating>,
+    @InjectRepository(Lecture)
+    private readonly lectureRepository: Repository<Lecture>,
   ) {}
 
   async createCourse(courseDto: AddCourseDto, adminId: number) {
@@ -55,6 +60,7 @@ export class CourseService {
       teacher: teacher,
       createdAt: new Date(),
       createdBy: adminId as any,
+      coverImg: courseDto.CoverImg ?? null,
     };
 
     const course = this.courseRepository.create(courseData);
@@ -113,6 +119,43 @@ export class CourseService {
         totalPages: Math.ceil(total / limit),
         currentPage: page,
       },
+    };
+  }
+
+  async getCourseById(courseId: number) {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+      relations: ['courseCategory', 'teacher', 'lectures'],
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const ratingStats = await this.courseRatingRepository
+      .createQueryBuilder('rating')
+      .select('COUNT(rating.id)', 'count')
+      .addSelect('AVG(rating.rating)', 'average')
+      .where('rating.course_id = :id', { id: courseId })
+      .getRawOne();
+
+    const rawlectureStats = await this.lectureRepository
+      .createQueryBuilder('lecture')
+      .select('lecture.lecture_type', 'lecture_type')
+      .addSelect('COUNT(lecture.id)', 'count')
+      .where('lecture.course_id = :id', { id: courseId })
+      .groupBy('lecture.lecture_type')
+      .getRawMany();
+
+    const lectureStats: Record<string, number> = {};
+      rawlectureStats.forEach((item) => {
+      lectureStats[item.lecture_type] = Number(item.count);
+    });
+    return {
+      ...course,
+      ratingCount: Number(ratingStats.count) || 0,
+      averageRating: Number(ratingStats.average) || 0,
+      lectureStats,
     };
   }
 }

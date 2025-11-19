@@ -7,6 +7,7 @@ import {
   Req,
   Patch,
   Query,
+  Param,
   Request,
 } from '@nestjs/common';
 import { CourseService } from './course.service';
@@ -32,11 +33,12 @@ export class CourseController {
     @Query('category') category?: string,
     @Query('search') search?: string,
   ) {
-    return this.courseService.getAllCourses(
-      +page,
-      +limit,
-      category,
-      search,
-    );
+    return this.courseService.getAllCourses(+page, +limit, category, search);
+  }
+
+  @UseGuards(JwtBlacklistGuard)
+  @Get(':id')
+  async getCourseById(@Param('id') courseId: number) {
+    return this.courseService.getCourseById(courseId);
   }
 }
