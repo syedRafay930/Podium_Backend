@@ -10,10 +10,11 @@ import { CourseService } from './course.service';
 import { CourseController } from './course.controller';
 import { JwtBlacklistGuard } from '../Auth/guards/jwt.guard';
 import { AuthModule } from '../Auth/auth.module';
+import { EnrolledCourses } from 'src/Entities/entities/EnrolledCourses';
 
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Course, CourseRating, Admin, Teacher, CourseCategory, Lecture]), AuthModule],
+  imports: [TypeOrmModule.forFeature([Course, CourseRating, Admin, Teacher, CourseCategory, Lecture, EnrolledCourses]), AuthModule],
   controllers: [CourseController],
   providers: [CourseService],
   exports: [CourseService],
