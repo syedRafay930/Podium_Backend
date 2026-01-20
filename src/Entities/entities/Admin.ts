@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from "typeorm";
 import { Course } from "./Course";
+import { Modules } from "./Modules";
 
 @Index("admin_pkey", ["id"], { unique: true })
 @Entity("admin", { schema: "public" })
@@ -45,4 +46,7 @@ export class Admin {
 
   @OneToMany(() => Course, (course) => course.createdBy)
   courses: Course[];
+
+  @OneToMany(() => Modules, (modules) => modules.updatedBy)
+  modules: Modules[];
 }
