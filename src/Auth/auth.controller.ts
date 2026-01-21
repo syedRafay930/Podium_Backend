@@ -39,7 +39,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Admin login', description: 'Authenticate admin user with email and password' })
+  @ApiOperation({ summary: 'login', description: 'Authenticate user with email and password' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
     status: 200,
@@ -102,7 +102,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Admin logout', description: 'Logout admin user and blacklist token' })
+  @ApiOperation({ summary: 'logout', description: 'Logout user and blacklist token' })
   @ApiResponse({
     status: 200,
     description: 'Logout successful',
