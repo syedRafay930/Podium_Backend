@@ -36,7 +36,10 @@ export class AuthService {
     if (!user.hashedPassword) {
       throw new UnauthorizedException('Password not set for user');
     }
-    const isPasswordMatch = await bcrypt.compare(login_password, user.hashedPassword);
+    const isPasswordMatch = await bcrypt.compare(
+      login_password,
+      user.hashedPassword,
+    );
 
     if (!isPasswordMatch) {
       await this.handleFailedLogin(email);
@@ -46,14 +49,14 @@ export class AuthService {
     await this.resetLoginFailures(email);
 
     const { hashedPassword, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return { ...userWithoutPassword, role: 'admin' };
   }
 
   async generateJwtToken(user: any): Promise<string> {
     const payload = {
       sub: user.email,
-      first_name: (user.firstName || 'DefaultFirstName'),
-      last_name: (user.lastName || 'DefaultLastName'),
+      first_name: user.firstName || 'DefaultFirstName',
+      last_name: user.lastName || 'DefaultLastName',
       admin_id: user.id,
     };
     return this.jwtService.signAsync(payload, {
