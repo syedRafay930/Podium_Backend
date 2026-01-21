@@ -46,7 +46,7 @@ export class AuthService {
     await this.resetLoginFailures(email);
 
     const { hashedPassword, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return {...userWithoutPassword, role: 'student' };
   }
 
   async generateJwtToken(user: any): Promise<string> {
