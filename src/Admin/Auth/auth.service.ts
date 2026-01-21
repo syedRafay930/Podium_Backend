@@ -23,6 +23,8 @@ export class AuthService {
       throw new UnauthorizedException('Incorrect email');
     }
 
+    // random check
+
     if (!user.isActive) {
       throw new UnauthorizedException('User is Blocked');
     }
