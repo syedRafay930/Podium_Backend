@@ -4,7 +4,7 @@ import { UsersService } from './user.service';
 //import { UsersController } from './user.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { RedisModule } from '@nestjs-modules/ioredis';
-import { AuthModule } from '../Auth/auth.module';
+import { AuthModule } from 'src/Auth/auth.module';
 //import { MailModule } from 'src/Nodemailer/mailer.module';
 import { Admin } from 'src/Entities/entities/Admin';
 @Module({

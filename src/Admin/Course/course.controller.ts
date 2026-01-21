@@ -22,7 +22,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { CourseService } from './course.service';
-import { JwtBlacklistGuard } from '../Auth/guards/jwt.guard';
+import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { AddCourseDto } from './dto/add_course.dto';
 import { CourseResponseDto } from 'src/common/dto/responses/course-response.dto';
 import { PaginatedCoursesResponseDto } from 'src/common/dto/responses/paginated-courses-response.dto';

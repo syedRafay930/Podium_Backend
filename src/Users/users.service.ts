@@ -5,21 +5,25 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not } from 'typeorm';
+import { Admin, Not } from 'typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { RedisService } from 'src/Auth/redis.service';
-import { Admin } from 'src/Entities/entities/Admin';
+import { RedisService } from '../Auth/redis.service';
+import { Users } from 'src/Entities/entities/Users';
+import { UserRole } from 'src/Entities/entities/UserRole';
 //import { MailService } from 'src/Nodemailer/mailer.service';
 import { ILike } from 'typeorm';
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(Admin)
-    private readonly adminRepository: Repository<Admin>,
+    @InjectRepository(Users)
+    private readonly usersRepository: Repository<Users>,
+
+    @InjectRepository(UserRole)
+    private readonly userRoleRepository: Repository<UserRole>,
 
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -27,19 +31,20 @@ export class UsersService {
     //private readonly mailService: MailService,
   ) {}
 
-  async findByEmail(email: string): Promise<Admin | null> {
-    return this.adminRepository.findOne({
+  async findByEmail(email: string): Promise<Users | null> {
+    return this.usersRepository.findOne({
       where: { email: email },
+      relations: ['role'],      
     });
   }
 
   async updatePassword(userEmail: string, newPassword: string): Promise<void> {
-    const user = await this.adminRepository.findOne({
+    const user = await this.usersRepository.findOne({
       where: { email: userEmail },
     });
 
     if (user) {
-      await this.adminRepository.update(
+      await this.usersRepository.update(
         { email: userEmail },
         { hashedPassword: newPassword },
       );

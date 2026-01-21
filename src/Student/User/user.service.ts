@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { RedisService } from '../Auth/redis.service';
+import { RedisService } from 'src/Auth/redis.service';
 import { Student } from 'src/Entities/entities/Student';
 import { AddInternalUserDto } from './dto/add_internal_user.dto';
 

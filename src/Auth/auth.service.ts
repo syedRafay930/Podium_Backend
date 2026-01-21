@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { UsersService } from '../User/user.service';
+import { UsersService } from 'src/Users/users.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -36,7 +36,10 @@ export class AuthService {
     if (!user.hashedPassword) {
       throw new UnauthorizedException('Password not set for user');
     }
-    const isPasswordMatch = await bcrypt.compare(login_password, user.hashedPassword);
+    const isPasswordMatch = await bcrypt.compare(
+      login_password,
+      user.hashedPassword,
+    );
 
     if (!isPasswordMatch) {
       await this.handleFailedLogin(email);
@@ -46,15 +49,17 @@ export class AuthService {
     await this.resetLoginFailures(email);
 
     const { hashedPassword, ...userWithoutPassword } = user;
-    return {...userWithoutPassword, role: 'student' };
+    return userWithoutPassword;
   }
 
   async generateJwtToken(user: any): Promise<string> {
     const payload = {
       sub: user.email,
-      first_name: (user.firstName || 'DefaultFirstName'),
-      last_name: (user.lastName || 'DefaultLastName'),
-      student_id: user.id,
+      first_name: user.firstName || 'DefaultFirstName',
+      last_name: user.lastName || 'DefaultLastName',
+      id: user.id,
+      role_id: user.role.id,
+      role_name: user.role.roleName,
     };
     return this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),
@@ -112,15 +117,6 @@ export class AuthService {
     await this.redisService.deleteValue(`forgot:${token}`);
 
     return { message: 'Password has been reset successfully' };
-  }
-
-  async signUp(signUpDto: any) {
-    const existingUser = await this.usersService.findByEmail(signUpDto.email);
-    if (existingUser) {
-      throw new UnauthorizedException('Email already in use');
-    }
-    const newUser = await this.usersService.createInternalUser(signUpDto);
-    return { message: 'User registered successfully', user: newUser };
   }
 
   //Cooldown Logic

@@ -21,16 +21,14 @@ import { AuthService } from './auth.service';
 import { LoginDto } from 'src/common/dto/auth/login.dto';
 import { ForgotPasswordDto } from 'src/common/dto/auth/forgot-password.dto';
 import { ResetPasswordDto } from 'src/common/dto/auth/reset-password.dto';
-import { SignUpDto } from './dto/sign_up.dto';
-import { StdJwtBlacklistGuard } from './guards/jwt.guard';
+import { JwtBlacklistGuard } from './guards/jwt.guards';
 import { LoginResponseDto } from 'src/common/dto/responses/login-response.dto';
 import { MessageResponseDto } from 'src/common/dto/responses/message-response.dto';
-import { SignUpResponseDto } from 'src/common/dto/responses/signup-response.dto';
 
 //import { RBACService } from '../RBAC/rbac.service';
 //import { FirebaseService } from 'src/firebase/firebase.service';
 
-@ApiTags('Student Auth')
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -41,7 +39,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Student login', description: 'Authenticate student user with email and password' })
+  @ApiOperation({ summary: 'Admin login', description: 'Authenticate admin user with email and password' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
     status: 200,
@@ -70,23 +68,9 @@ export class AuthController {
     };
   }
 
-  @Post('sign-up')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Student registration', description: 'Register a new student account' })
-  @ApiBody({ type: SignUpDto })
-  @ApiResponse({
-    status: 201,
-    description: 'User registered successfully',
-    type: SignUpResponseDto,
-  })
-  @ApiResponse({ status: 401, description: 'Email already in use' })
-  async signUp(@Body() signUpDto: SignUpDto) {
-    return this.authService.signUp(signUpDto);
-  }
-
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request password reset', description: 'Send password reset link to student email' })
+  @ApiOperation({ summary: 'Request password reset', description: 'Send password reset link to admin email' })
   @ApiBody({ type: ForgotPasswordDto })
   @ApiResponse({
     status: 200,
@@ -101,7 +85,7 @@ export class AuthController {
 
   @Patch('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password', description: 'Reset student password using token from email' })
+  @ApiOperation({ summary: 'Reset password', description: 'Reset admin password using token from email' })
   @ApiBody({ type: ResetPasswordDto })
   @ApiResponse({
     status: 200,
@@ -114,11 +98,11 @@ export class AuthController {
     return this.authService.resetPassword(token, newPassword);
   }
 
-  @UseGuards(StdJwtBlacklistGuard)
+  @UseGuards(JwtBlacklistGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Student logout', description: 'Logout student user and blacklist token' })
+  @ApiOperation({ summary: 'Admin logout', description: 'Logout admin user and blacklist token' })
   @ApiResponse({
     status: 200,
     description: 'Logout successful',

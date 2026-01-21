@@ -19,7 +19,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { UsersService } from './user.service';
-import { StdJwtBlacklistGuard } from '../Auth/guards/jwt.guard';
+import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { CourseService } from 'src/Admin/Course/course.service';
 import { PaginatedCoursesResponseDto } from 'src/common/dto/responses/paginated-courses-response.dto';
 import { CourseResponseDto } from 'src/common/dto/responses/course-response.dto';
@@ -32,7 +32,7 @@ export class UserController {
     private readonly courseService: CourseService,
   ) {}
 
-  @UseGuards(StdJwtBlacklistGuard)
+  @UseGuards(JwtBlacklistGuard)
   @Get('all-courses')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all courses', description: 'Get paginated list of courses with optional filters (Student only)' })
@@ -56,7 +56,7 @@ export class UserController {
     return this.courseService.getAllCourses(+page, +limit, category, search);
   }
 
-  @UseGuards(StdJwtBlacklistGuard)
+  @UseGuards(JwtBlacklistGuard)
   @Get('course/:id')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get course by ID', description: 'Get detailed course information by ID (Student only)' })

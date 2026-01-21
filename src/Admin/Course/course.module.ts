@@ -8,8 +8,7 @@ import { CourseCategory } from 'src/Entities/entities/CourseCategory';
 import { Lecture } from 'src/Entities/entities/Lecture';
 import { CourseService } from './course.service';
 import { CourseController } from './course.controller';
-import { JwtBlacklistGuard } from '../Auth/guards/jwt.guard';
-import { AuthModule } from '../Auth/auth.module';
+import { AuthModule } from 'src/Auth/auth.module';
 import { EnrolledCourses } from 'src/Entities/entities/EnrolledCourses';
 import { Modules } from 'src/Entities/entities/Modules';
 

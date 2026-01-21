@@ -2,17 +2,17 @@ import { forwardRef, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { UsersModule } from '../User/user.module';
-import { StdJwtStrategy } from './jwt.strategy';
+import { UsersModule } from 'src/Users/users.module';
+import { JwtStrategy } from './jwt.strategy';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from './redis.service';
 import { MailModule } from 'src/Nodemailer/mailer.module';
-import { Student } from 'src/Entities/entities/Student';
+import { Users } from 'src/Entities/entities/Users';
 import { TypeOrmModule } from '@nestjs/typeorm';
 //import { RBACModule } from '../RBAC/rbac.module';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Student]),
+    TypeOrmModule.forFeature([Users]),
     forwardRef(() => UsersModule),
     //forwardRef(() => RBACModule),
     MailModule,
@@ -20,11 +20,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        // signOptions: { expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '20m' },
+        //signOptions: { expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '20m' },
       }),
     }),
   ],
-  providers: [AuthService, StdJwtStrategy , RedisService],
+  providers: [AuthService, JwtStrategy , RedisService],
   controllers: [AuthController],
   exports: [RedisService , JwtModule, AuthService]
 })
