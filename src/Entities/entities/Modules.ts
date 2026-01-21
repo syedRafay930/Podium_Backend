@@ -2,11 +2,10 @@ import {
   Column,
   Entity,
   Index,
-  JoinColumn,
-  ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
-import { Admin } from "./Admin";
+import { RelationModule } from "./RelationModule";
 
 @Index("modules_pkey", ["id"], { unique: true })
 @Index("modules_module_name_key", ["moduleName"], { unique: true })
@@ -33,7 +32,18 @@ export class Modules {
   @Column("timestamp without time zone", { name: "updated_at", nullable: true })
   updatedAt: Date | null;
 
-  @ManyToOne(() => Admin, (admin) => admin.modules)
-  @JoinColumn([{ name: "updated_by", referencedColumnName: "id" }])
-  updatedBy: Admin;
+  @Column("integer", { name: "updated_by", nullable: true })
+  updatedBy: number | null;
+
+  @OneToMany(
+    () => RelationModule,
+    (relationModule) => relationModule.childModule
+  )
+  relationModules: RelationModule[];
+
+  @OneToMany(
+    () => RelationModule,
+    (relationModule) => relationModule.parentModule
+  )
+  relationModules2: RelationModule[];
 }

@@ -25,7 +25,7 @@ import { JwtBlacklistGuard } from './guards/jwt.guards';
 import { LoginResponseDto } from 'src/common/dto/responses/login-response.dto';
 import { MessageResponseDto } from 'src/common/dto/responses/message-response.dto';
 
-//import { RBACService } from '../RBAC/rbac.service';
+import { RBACService } from '../RBAC/rbac.service';
 //import { FirebaseService } from 'src/firebase/firebase.service';
 
 @ApiTags('Auth')
@@ -33,7 +33,7 @@ import { MessageResponseDto } from 'src/common/dto/responses/message-response.dt
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    //private readonly rbacService: RBACService,
+    private readonly rbacService: RBACService,
     //private readonly firebaseService: FirebaseService,
   ) {}
 
@@ -59,12 +59,12 @@ export class AuthController {
       throw new Error('Invalid credentials');
     }
     const token = await this.authService.generateJwtToken(user);
-    //const sidebar = await this.rbacService.getModulesByRole(user.role.id);
+    const sidebar = await this.rbacService.getModulesByRole(user.role.id);
     return {
       message: 'Login successful',
       access_token: token,
       user,
-      //sidebar,
+      sidebar,
     };
   }
 

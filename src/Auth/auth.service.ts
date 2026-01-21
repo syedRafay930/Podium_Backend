@@ -81,7 +81,7 @@ export class AuthService {
 
     await this.redisService.setValue(`forgot:${token}`, user.email, 300); // 5 mins
 
-    const resetLink = `http://localhost:5173/reset-password?token=${token}&createNewPassword=false`;
+    const resetLink = `http://localhost:3000/resetpassword/${token}`;
 
     await this.mailService.sendTemplatedMail(
       email,

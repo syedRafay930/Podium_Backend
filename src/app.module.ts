@@ -4,8 +4,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { ScheduleModule } from '@nestjs/schedule';
-import { AdminAppModule } from './Admin/admin.app.module';
-import { StudentAppModule } from './Student/student.app.module';
 import { AuthModule } from './Auth/auth.module';
 import { UsersModule } from './Users/users.module';
 @Module({
@@ -34,8 +32,7 @@ import { UsersModule } from './Users/users.module';
         url: config.get<string>('REDIS_URL') || 'redis://localhost:6380',
       }),
     }),
-    AdminAppModule,
-    StudentAppModule,
+
     AuthModule,
     UsersModule,
   ],

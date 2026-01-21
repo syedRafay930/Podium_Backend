@@ -5,6 +5,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
+import { RolePermissions } from "./RolePermissions";
 import { Users } from "./Users";
 
 @Index("user_role_pkey", ["id"], { unique: true })
@@ -44,6 +45,9 @@ export class UserRole {
 
   @Column("integer", { name: "updated_by", nullable: true })
   updatedBy: number | null;
+
+  @OneToMany(() => RolePermissions, (rolePermissions) => rolePermissions.role)
+  rolePermissions: RolePermissions[];
 
   @OneToMany(() => Users, (users) => users.role)
   users: Users[];
