@@ -7,9 +7,11 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
+import { Assignment } from "./Assignment";
 import { CourseRating } from "./CourseRating";
 import { CourseCategory } from "./CourseCategory";
 import { Users } from "./Users";
+import { Enrollment } from "./Enrollment";
 import { Lectures } from "./Lectures";
 
 @Index("courses_pkey", ["id"], { unique: true })
@@ -46,6 +48,12 @@ export class Courses {
   @Column("timestamp without time zone", { name: "created_at", nullable: true })
   createdAt: Date | null;
 
+  @Column("integer", { name: "total_lectures", nullable: true })
+  totalLectures: number | null;
+
+  @OneToMany(() => Assignment, (assignment) => assignment.course)
+  assignments: Assignment[];
+
   @OneToMany(() => CourseRating, (courseRating) => courseRating.course)
   courseRatings: CourseRating[];
 
@@ -59,11 +67,14 @@ export class Courses {
 
   @ManyToOne(() => Users, (users) => users.courses2)
   @JoinColumn([{ name: "teacher_id", referencedColumnName: "id" }])
-  teacher: Users | null;
+  teacher: Users;
 
   @ManyToOne(() => Users, (users) => users.courses3)
   @JoinColumn([{ name: "updated_by", referencedColumnName: "id" }])
   updatedBy: Users;
+
+  @OneToMany(() => Enrollment, (enrollment) => enrollment.course)
+  enrollments: Enrollment[];
 
   @OneToMany(() => Lectures, (lectures) => lectures.course)
   lectures: Lectures[];

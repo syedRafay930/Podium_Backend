@@ -7,9 +7,12 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
+import { Assignment } from "./Assignment";
+import { AssignmentSubmission } from "./AssignmentSubmission";
 import { CourseCategory } from "./CourseCategory";
 import { CourseRating } from "./CourseRating";
 import { Courses } from "./Courses";
+import { Enrollment } from "./Enrollment";
 import { Lectures } from "./Lectures";
 import { UserRole } from "./UserRole";
 
@@ -63,6 +66,21 @@ export class Users {
   @Column("timestamp without time zone", { name: "deleted_at", nullable: true })
   deletedAt: Date | null;
 
+  @OneToMany(() => Assignment, (assignment) => assignment.createdBy)
+  assignments: Assignment[];
+
+  @OneToMany(
+    () => AssignmentSubmission,
+    (assignmentSubmission) => assignmentSubmission.gradedBy
+  )
+  assignmentSubmissions: AssignmentSubmission[];
+
+  @OneToMany(
+    () => AssignmentSubmission,
+    (assignmentSubmission) => assignmentSubmission.student
+  )
+  assignmentSubmissions2: AssignmentSubmission[];
+
   @OneToMany(() => CourseCategory, (courseCategory) => courseCategory.createdBy)
   courseCategories: CourseCategory[];
 
@@ -80,6 +98,12 @@ export class Users {
 
   @OneToMany(() => Courses, (courses) => courses.updatedBy)
   courses3: Courses[];
+
+  @OneToMany(() => Enrollment, (enrollment) => enrollment.enrolledBy)
+  enrollments: Enrollment[];
+
+  @OneToMany(() => Enrollment, (enrollment) => enrollment.student)
+  enrollments2: Enrollment[];
 
   @OneToMany(() => Lectures, (lectures) => lectures.createdBy)
   lectures: Lectures[];
