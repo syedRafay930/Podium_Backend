@@ -30,10 +30,9 @@ async function bootstrap() {
       },
       'JWT-auth',
     )
-    // .addTag('Admin Auth', 'Admin authentication endpoints')
-    // .addTag('Student Auth', 'Student authentication endpoints')
-    // .addTag('Admin Courses', 'Course management for admins')
-    // .addTag('Student Courses', 'Course browsing for students')
+    .addTag('Auth', 'Authentication endpoints for user login, logout, and password management')
+    .addTag('Courses', 'Course management endpoints for creating, viewing, and managing courses')
+    .addTag('RBAC', 'Role-Based Access Control endpoints for managing modules and permissions')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

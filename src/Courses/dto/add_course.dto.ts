@@ -77,4 +77,15 @@ export class AddCourseDto {
   @ArrayNotEmpty()
   @IsString({ each: true })
   Languages: string[];
+
+  // Note: This field is for Swagger documentation only.
+  // FileInterceptor('image') extracts the file from multipart/form-data before it reaches this DTO.
+  // The actual file is received via @UploadedFile() decorator in the controller.
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    description: 'Course cover image file (optional). File field name must be "image".',
+    required: false,
+  })
+  image?: any;
 }
