@@ -7,6 +7,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './Auth/auth.module';
 import { UsersModule } from './Users/users.module';
 import { CourseModule } from './Courses/courses.module';
+import { EnrollmentsModule } from './Enrollments/enrollments.module';
+import { AssignmentsModule } from './Assignments/assignments.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -37,6 +39,8 @@ import { CourseModule } from './Courses/courses.module';
     AuthModule,
     UsersModule,
     CourseModule,
+    EnrollmentsModule,
+    AssignmentsModule,
   ],
 })
 export class AppModule {}

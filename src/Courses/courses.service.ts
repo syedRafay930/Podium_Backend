@@ -64,7 +64,7 @@ export class CourseService {
       price: courseDto.Price,
       longDescription: courseDto.LongDescription ?? null,
       courseCategory: category,
-      teacher: teacher,
+      teacher: teacher ?? undefined,
       createdAt: new Date(),
       createdBy: adminId as any,
       coverImg: coverImgUrl,
