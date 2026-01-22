@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ModuleDto } from './module-response.dto';
 
 export class UserDto {
   @ApiProperty({ description: 'User ID', example: 1, type: Number })
@@ -40,5 +41,25 @@ export class LoginResponseDto {
     type: UserDto,
   })
   user: UserDto;
+
+  @ApiProperty({
+    description: 'Sidebar modules based on user role permissions',
+    type: [ModuleDto],
+    example: [
+      {
+        id: 1,
+        name: 'Dashboard',
+        is_enable: true,
+        children: [
+          {
+            id: 2,
+            name: 'Sub Module',
+            is_enable: true
+          }
+        ]
+      }
+    ]
+  })
+  sidebar: ModuleDto[];
 }
 

@@ -16,6 +16,7 @@ import {
   ApiBody,
   ApiResponse,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from 'src/common/dto/auth/login.dto';
@@ -39,14 +40,40 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'login', description: 'Authenticate user with email and password' })
-  @ApiBody({ type: LoginDto })
+  @ApiConsumes('application/json')
+  @ApiOperation({ 
+    summary: 'User login', 
+    description: 'Authenticate user with email and password. Returns JWT token, user information, and sidebar modules based on role permissions.' 
+  })
+  @ApiBody({ 
+    type: LoginDto,
+    description: 'User credentials for authentication',
+    examples: {
+      example1: {
+        value: {
+          email: 'user@example.com',
+          password: 'SecurePassword123!'
+        }
+      }
+    }
+  })
   @ApiResponse({
     status: 200,
-    description: 'Login successful',
+    description: 'Login successful - Returns JWT token, user data, and sidebar modules',
     type: LoginResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - Email and password are required' 
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid email or password' 
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error' 
+  })
   async login(@Body() loginDto: LoginDto) {
     const { email, password } = loginDto;
 
@@ -70,14 +97,39 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request password reset', description: 'Send password reset link to admin email' })
-  @ApiBody({ type: ForgotPasswordDto })
+  @ApiConsumes('application/json')
+  @ApiOperation({ 
+    summary: 'Request password reset', 
+    description: 'Send password reset link to user email address. The reset token will be sent via email.' 
+  })
+  @ApiBody({ 
+    type: ForgotPasswordDto,
+    description: 'Email address for password reset',
+    examples: {
+      example1: {
+        value: {
+          email: 'user@example.com'
+        }
+      }
+    }
+  })
   @ApiResponse({
     status: 200,
-    description: 'Reset link sent to email',
+    description: 'Password reset link sent successfully to email',
     type: MessageResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'User not found' })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - Invalid email format' 
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'User not found with the provided email' 
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error - Failed to send email' 
+  })
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     const { email } = forgotPasswordDto;
     return this.authService.forgotPassword(email);
@@ -85,14 +137,40 @@ export class AuthController {
 
   @Patch('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password', description: 'Reset admin password using token from email' })
-  @ApiBody({ type: ResetPasswordDto })
+  @ApiConsumes('application/json')
+  @ApiOperation({ 
+    summary: 'Reset password', 
+    description: 'Reset user password using the token received via email. The new password must meet security requirements (min 8 characters with uppercase, lowercase, number, and special character).' 
+  })
+  @ApiBody({ 
+    type: ResetPasswordDto,
+    description: 'Reset token and new password',
+    examples: {
+      example1: {
+        value: {
+          token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          newPassword: 'NewSecurePassword123!'
+        }
+      }
+    }
+  })
   @ApiResponse({
     status: 200,
     description: 'Password has been reset successfully',
     type: MessageResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Invalid or expired token' })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - Invalid password format or missing fields' 
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or expired reset token' 
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error' 
+  })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     const { token, newPassword } = resetPasswordDto;
     return this.authService.resetPassword(token, newPassword);
@@ -102,13 +180,24 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'logout', description: 'Logout user and blacklist token' })
+  @ApiConsumes('application/json')
+  @ApiOperation({ 
+    summary: 'User logout', 
+    description: 'Logout user and blacklist the JWT token. The token will be invalidated and cannot be used for subsequent requests.' 
+  })
   @ApiResponse({
     status: 200,
-    description: 'Logout successful',
+    description: 'Logout successful - Token has been blacklisted',
     type: MessageResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or missing JWT token' 
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error' 
+  })
   async logout(@Request() req) {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {

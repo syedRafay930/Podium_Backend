@@ -20,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiQuery,
   ApiParam,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { CourseService } from './courses.service';
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
@@ -39,33 +40,103 @@ export class CourseController {
   @UseInterceptors(FileInterceptor('image'))
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Create new course', description: 'Create a new course (Admin only)' })
-  @ApiBody({ type: AddCourseDto })
-  @ApiResponse({ status: 201, description: 'Course created successfully', type: CourseResponseDto })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
-  @ApiResponse({ status: 404, description: 'Course category or teacher not found' })
-  @ApiResponse({ status: 409, description: 'Course already exists' })
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ 
+    summary: 'Create new course', 
+    description: 'Create a new course with course details and optional cover image. Only admins (role_id = 1) can create courses.' 
+  })
+  @ApiBody({ 
+    type: AddCourseDto,
+    description: 'Course information and cover image file. The image file should be sent as multipart/form-data with field name "image". All course fields are required except LongDescription, TeacherId, and image.',
+    required: true,
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Course created successfully with cover image uploaded', 
+    type: CourseResponseDto 
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - Invalid input data or missing required fields' 
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or missing JWT token' 
+  })
+  @ApiResponse({ 
+    status: 403, 
+    description: 'Forbidden - Only admins can create courses' 
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Not found - Course category or teacher not found' 
+  })
+  @ApiResponse({ 
+    status: 409, 
+    description: 'Conflict - Course with the same name already exists' 
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error - Failed to create course or upload image' 
+  })
   async createCourse(@Request() req, @Body() courseDto: AddCourseDto, @UploadedFile() file: Express.Multer.File) {
     if (req.user.role_id !== 1) {
       throw new UnauthorizedException('Only admins can create courses');
     }
+    // Note: The 'image' field in AddCourseDto is for Swagger documentation only.
+    // FileInterceptor('image') extracts the file from multipart/form-data before it reaches this DTO.
+    // The actual file is received via the @UploadedFile() parameter, not in courseDto.
     return this.courseService.createCourse(courseDto, req.user.id, file);
   }
 
   @UseGuards(JwtBlacklistGuard)
   @Get('all')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get all courses', description: 'Get paginated list of courses with optional filters (Admin only)' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)', example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10)', example: 10 })
-  @ApiQuery({ name: 'category', required: false, type: String, description: 'Filter by category ID', example: '1' })
-  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by course name', example: 'TypeScript' })
+  @ApiOperation({ 
+    summary: 'Get all courses', 
+    description: 'Get paginated list of courses with optional filters for category and search. Supports pagination with page and limit parameters.' 
+  })
+  @ApiQuery({ 
+    name: 'page', 
+    required: false, 
+    type: Number, 
+    description: 'Page number for pagination (starts from 1)', 
+    example: 1 
+  })
+  @ApiQuery({ 
+    name: 'limit', 
+    required: false, 
+    type: Number, 
+    description: 'Number of items per page', 
+    example: 10 
+  })
+  @ApiQuery({ 
+    name: 'category', 
+    required: false, 
+    type: String, 
+    description: 'Filter courses by category ID', 
+    example: '1' 
+  })
+  @ApiQuery({ 
+    name: 'search', 
+    required: false, 
+    type: String, 
+    description: 'Search courses by name (case-insensitive partial match)', 
+    example: 'TypeScript' 
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of courses retrieved successfully',
+    description: 'Paginated list of courses retrieved successfully',
     type: PaginatedCoursesResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or missing JWT token' 
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error' 
+  })
   async getAllCourses(
     @Request() req: any,
     @Query('page') page = 1,
@@ -79,15 +150,37 @@ export class CourseController {
   @UseGuards(JwtBlacklistGuard)
   @Get(':id')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get course by ID', description: 'Get detailed course information by ID (Admin only)' })
-  @ApiParam({ name: 'id', type: Number, description: 'Course ID', example: 1 })
+  @ApiOperation({ 
+    summary: 'Get course by ID', 
+    description: 'Get detailed course information including category, teacher, lectures, ratings, and statistics by course ID.' 
+  })
+  @ApiParam({ 
+    name: 'id', 
+    type: Number, 
+    description: 'Unique identifier of the course', 
+    example: 1 
+  })
   @ApiResponse({
     status: 200,
-    description: 'Course details retrieved successfully',
+    description: 'Course details retrieved successfully with all related information',
     type: CourseResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
-  @ApiResponse({ status: 404, description: 'Course not found' })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - Invalid course ID format' 
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or missing JWT token' 
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Not found - Course with the specified ID does not exist' 
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error' 
+  })
   async getCourseById(@Param('id') courseId: number) {
     return this.courseService.getCourseById(courseId);
   }
