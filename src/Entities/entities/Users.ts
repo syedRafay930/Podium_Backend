@@ -7,6 +7,10 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
+import { CourseCategory } from "./CourseCategory";
+import { CourseRating } from "./CourseRating";
+import { Courses } from "./Courses";
+import { Lectures } from "./Lectures";
 import { UserRole } from "./UserRole";
 
 @Index("users_email_key", ["email"], { unique: true })
@@ -58,6 +62,30 @@ export class Users {
 
   @Column("timestamp without time zone", { name: "deleted_at", nullable: true })
   deletedAt: Date | null;
+
+  @OneToMany(() => CourseCategory, (courseCategory) => courseCategory.createdBy)
+  courseCategories: CourseCategory[];
+
+  @OneToMany(() => CourseCategory, (courseCategory) => courseCategory.updatedBy)
+  courseCategories2: CourseCategory[];
+
+  @OneToMany(() => CourseRating, (courseRating) => courseRating.student)
+  courseRatings: CourseRating[];
+
+  @OneToMany(() => Courses, (courses) => courses.createdBy)
+  courses: Courses[];
+
+  @OneToMany(() => Courses, (courses) => courses.teacher)
+  courses2: Courses[];
+
+  @OneToMany(() => Courses, (courses) => courses.updatedBy)
+  courses3: Courses[];
+
+  @OneToMany(() => Lectures, (lectures) => lectures.createdBy)
+  lectures: Lectures[];
+
+  @OneToMany(() => Lectures, (lectures) => lectures.updatedBy)
+  lectures2: Lectures[];
 
   @ManyToOne(() => Users, (users) => users.users, { onDelete: "SET NULL" })
   @JoinColumn([{ name: "created_by", referencedColumnName: "id" }])

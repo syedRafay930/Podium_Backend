@@ -46,7 +46,7 @@ export class UsersService {
     if (user) {
       await this.usersRepository.update(
         { email: userEmail },
-        { hashedPassword: newPassword },
+        { hashedPassword: newPassword , updatedAt: new Date() , updatedBy: user},        
       );
     }
   }

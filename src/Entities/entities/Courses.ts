@@ -1,0 +1,70 @@
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from "typeorm";
+import { CourseRating } from "./CourseRating";
+import { CourseCategory } from "./CourseCategory";
+import { Users } from "./Users";
+import { Lectures } from "./Lectures";
+
+@Index("courses_pkey", ["id"], { unique: true })
+@Entity("courses", { schema: "public" })
+export class Courses {
+  @PrimaryGeneratedColumn({ type: "integer", name: "id" })
+  id: number;
+
+  @Column("character varying", { name: "course_name", length: 255 })
+  courseName: string;
+
+  @Column("character varying", {
+    name: "short_description",
+    nullable: true,
+    length: 255,
+  })
+  shortDescription: string | null;
+
+  @Column("numeric", { name: "price", nullable: true, precision: 10, scale: 2 })
+  price: string | null;
+
+  @Column("text", { name: "long_description", nullable: true })
+  longDescription: string | null;
+
+  @Column("text", { name: "cover_img", nullable: true })
+  coverImg: string | null;
+
+  @Column("jsonb", { name: "languages", nullable: true })
+  languages: object | null;
+
+  @Column("timestamp without time zone", { name: "updated_at", nullable: true })
+  updatedAt: Date | null;
+
+  @Column("timestamp without time zone", { name: "created_at", nullable: true })
+  createdAt: Date | null;
+
+  @OneToMany(() => CourseRating, (courseRating) => courseRating.course)
+  courseRatings: CourseRating[];
+
+  @ManyToOne(() => CourseCategory, (courseCategory) => courseCategory.courses)
+  @JoinColumn([{ name: "course_category_id", referencedColumnName: "id" }])
+  courseCategory: CourseCategory;
+
+  @ManyToOne(() => Users, (users) => users.courses)
+  @JoinColumn([{ name: "created_by", referencedColumnName: "id" }])
+  createdBy: Users;
+
+  @ManyToOne(() => Users, (users) => users.courses2)
+  @JoinColumn([{ name: "teacher_id", referencedColumnName: "id" }])
+  teacher: Users | null;
+
+  @ManyToOne(() => Users, (users) => users.courses3)
+  @JoinColumn([{ name: "updated_by", referencedColumnName: "id" }])
+  updatedBy: Users;
+
+  @OneToMany(() => Lectures, (lectures) => lectures.course)
+  lectures: Lectures[];
+}
