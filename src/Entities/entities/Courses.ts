@@ -51,6 +51,9 @@ export class Courses {
   @Column("integer", { name: "total_lectures", nullable: true })
   totalLectures: number | null;
 
+  @Column("boolean", { name: "is_active", nullable: true })
+  isActive: boolean | null;
+
   @OneToMany(() => Assignment, (assignment) => assignment.course)
   assignments: Assignment[];
 

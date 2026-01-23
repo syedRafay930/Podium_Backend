@@ -66,6 +66,13 @@ export class Users {
   @Column("timestamp without time zone", { name: "deleted_at", nullable: true })
   deletedAt: Date | null;
 
+  @Column("character varying", {
+    name: "contact_number",
+    nullable: true,
+    length: 255,
+  })
+  contactNumber: string | null;
+
   @OneToMany(() => Assignment, (assignment) => assignment.createdBy)
   assignments: Assignment[];
 

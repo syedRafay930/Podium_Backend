@@ -1,7 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
-//import { UsersController } from './user.controller';
+import { UsersController } from './users.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { AuthModule } from '../Auth/auth.module';
@@ -18,6 +18,6 @@ import { UserRole } from 'src/Entities/entities/UserRole';
   ],
   providers: [UsersService],
   exports: [UsersService, TypeOrmModule],
-  //controllers: [UsersController],
+  controllers: [UsersController],
 })
 export class UsersModule {}

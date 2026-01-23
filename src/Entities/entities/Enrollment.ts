@@ -4,10 +4,12 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToOne,
   PrimaryGeneratedColumn,
 } from "typeorm";
 import { Courses } from "./Courses";
 import { Users } from "./Users";
+import { Transactions } from "./Transactions";
 
 @Index("enrollment_student_course_unique", ["courseId", "studentId"], {
   unique: true,
@@ -25,11 +27,11 @@ export class Enrollment {
   courseId: number;
 
   @Column("character varying", {
-    name: "payment_status",
+    name: "status",
     length: 20,
     default: () => "'pending'",
   })
-  paymentStatus: string;
+  status: string;
 
   @Column("integer", { name: "lecture_viewed", default: () => "0" })
   lectureViewed: number;
@@ -61,4 +63,7 @@ export class Enrollment {
   })
   @JoinColumn([{ name: "student_id", referencedColumnName: "id" }])
   student: Users;
+
+  @OneToOne(() => Transactions, (transactions) => transactions.enroll)
+  transactions: Transactions;
 }

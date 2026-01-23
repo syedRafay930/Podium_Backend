@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  Patch,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,6 +30,7 @@ import { AddCourseDto } from './dto/add_course.dto';
 import { UploadedFile } from '@nestjs/common';
 import { CourseResponseDto } from 'src/common/dto/responses/course-response.dto';
 import { PaginatedCoursesResponseDto } from 'src/common/dto/responses/paginated-courses-response.dto';
+import { EditCourseDto } from './dto/edit_course.dto';
 
 @ApiTags('Courses')
 @Controller('courses')
@@ -181,7 +183,64 @@ export class CourseController {
     status: 500, 
     description: 'Internal server error' 
   })
-  async getCourseById(@Param('id') courseId: number) {
-    return this.courseService.getCourseById(courseId);
+  async getCourseById(@Request() req, @Param('id') courseId: number) {
+    return this.courseService.getCourseById(courseId, req.user.id, req.user.role_id);
+  }
+
+  @UseGuards(JwtBlacklistGuard)
+  @Patch(':id')
+  @UseInterceptors(FileInterceptor('image'))
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ 
+    summary: 'Update course', 
+    description: 'Update an existing course with new details and optional cover image. Only admins (role_id = 1) can update courses.' 
+  })
+  @ApiParam({ 
+    name: 'id', 
+    type: Number, 
+    description: 'Course ID to update', 
+    example: 1 
+  })
+  @ApiBody({ 
+    type: EditCourseDto,
+    description: 'Course information to update. All fields are optional. If image is provided, it will replace the existing cover image.',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Course updated successfully', 
+    type: CourseResponseDto 
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Bad request - Invalid input data' 
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or missing JWT token' 
+  })
+  @ApiResponse({ 
+    status: 403, 
+    description: 'Forbidden - Only admins can update courses' 
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Not found - Course not found' 
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error - Failed to update course or upload image' 
+  })
+  async updateCourse(
+    @Request() req,
+    @Param('id') courseId: number,
+    @Body() courseDto: EditCourseDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (req.user.role_id !== 1) {
+      throw new UnauthorizedException('Only admins can update courses');
+    }
+    return this.courseService.updateCourse(courseId, courseDto, req.user.id, file);
   }
 }

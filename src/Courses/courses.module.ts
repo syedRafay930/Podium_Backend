@@ -9,10 +9,12 @@ import { CourseService } from './courses.service';
 import { CourseController } from './courses.controller';
 import { AuthModule } from '../Auth/auth.module';
 import { CloudinaryModule } from 'src/Cloudinary/cloudinary.module';
-//import { EnrolledCourses } from 'src/Entities/entities/EnrolledCourses';
+import { Enrollment } from 'src/Entities/entities/Enrollment';
+import { Assignment } from 'src/Entities/entities/Assignment';
+
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Courses, CourseRating, Users, CourseCategory, Lectures]), AuthModule, CloudinaryModule],
+  imports: [TypeOrmModule.forFeature([Courses, CourseRating, Users, CourseCategory, Lectures, Enrollment, Assignment]), AuthModule, CloudinaryModule],
   controllers: [CourseController],
   providers: [CourseService],
   exports: [CourseService],

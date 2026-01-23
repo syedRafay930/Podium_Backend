@@ -7,13 +7,13 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class EnrollCourseDto {
+export class EditEnrollCourseDto {
   @ApiProperty({
     description: 'Course ID to enroll in',
     example: 1,
     type: Number,
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsNumber()
   courseId: number;
 
@@ -26,5 +26,15 @@ export class EnrollCourseDto {
   @IsOptional()
   @IsNumber()
   studentId?: number;
+
+  @ApiProperty({
+    description: 'Enrollment status',
+    example: 'enrolled',
+    type: String,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  status?: string;
 
 }

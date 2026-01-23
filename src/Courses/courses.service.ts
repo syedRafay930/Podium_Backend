@@ -14,6 +14,9 @@ import { DeepPartial } from 'typeorm';
 import { CourseRating } from 'src/Entities/entities/CourseRating';
 import { Lectures } from 'src/Entities/entities/Lectures';
 import { uploadToCloudinary } from 'src/Cloudinary/cloudinary.helper';
+import { EditCourseDto } from './dto/edit_course.dto';
+import { Assignment } from 'src/Entities/entities/Assignment';
+import { Enrollment } from 'src/Entities/entities/Enrollment';
 
 @Injectable()
 export class CourseService {
@@ -30,6 +33,10 @@ export class CourseService {
     private readonly courseRatingRepository: Repository<CourseRating>,
     @InjectRepository(Lectures)
     private readonly lecturesRepository: Repository<Lectures>,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(Enrollment)
+    private readonly enrollmentRepository: Repository<Enrollment>,
   ) {}
 
   async createCourse(courseDto: AddCourseDto, adminId: number, file) {
@@ -69,6 +76,7 @@ export class CourseService {
       createdBy: adminId as any,
       coverImg: coverImgUrl,
       languages: courseDto.Languages ?? null,
+      isActive: true,
     };
 
     const course = this.courseRepository.create(courseData);
@@ -130,7 +138,7 @@ export class CourseService {
     };
   }
 
-  async getCourseById(courseId: number) {
+  async getCourseById(courseId: number, userId?: number, userRole?: number) {
     const course = await this.courseRepository.findOne({
       where: { id: courseId },
       relations: ['courseCategory', 'teacher', 'lectures'],
@@ -147,23 +155,140 @@ export class CourseService {
       .where('rating.course_id = :id', { id: courseId })
       .getRawOne();
 
-    const rawlectureStats = await this.lecturesRepository
-      .createQueryBuilder('lecture')
-      .select('lecture.lecture_type', 'lecture_type')
-      .addSelect('COUNT(lecture.id)', 'count')
-      .where('lecture.course_id = :id', { id: courseId })
-      .groupBy('lecture.lecture_type')
-      .getRawMany();
-
-    const lectureStats: Record<string, number> = {};
-    rawlectureStats.forEach((item) => {
-      lectureStats[item.lecture_type] = Number(item.count);
-    });
-    return {
+    const baseResponse = {
       ...course,
       ratingCount: Number(ratingStats.count) || 0,
       averageRating: Number(ratingStats.average) || 0,
-      lectureStats,
     };
+
+    // For admin (role_id = 1) and teacher (role_id = 2)
+    if (userRole === 1 || userRole === 2) {
+      // Get all enrollments with student details
+      const enrollments = await this.enrollmentRepository.find({
+        where: { courseId },
+        relations: ['student'],
+      });
+
+      // Get all assignments for this course
+      const assignments = await this.assignmentRepository.find({
+        where: { course: { id: courseId } },
+      });
+
+      // Get all lectures for this course
+      const lectures = await this.lecturesRepository.find({
+        where: { course: { id: courseId } },
+      });
+
+      return {
+        ...baseResponse,
+        assignments,
+        enrollments,
+        enrollmentCount: enrollments.length,
+        lectures,
+      };
+    }
+
+    // For students (role_id = 3) - only return lectures and assignments
+    const assignments = await this.assignmentRepository.find({
+      where: { course: { id: courseId } },
+    });
+
+    // Get all lectures for this course
+    const lectures = await this.lecturesRepository.find({
+      where: { course: { id: courseId } },
+    });
+
+    return {
+      ...baseResponse,
+      assignments,
+      lectures,
+    };
+  }
+
+  async updateCourse(
+    courseId: number,
+    courseDto: EditCourseDto,
+    adminId: number,
+    file?: Express.Multer.File,
+  ) {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+      relations: ['courseCategory', 'teacher'],
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Update category if provided
+    if (courseDto.CourseCategoryId) {
+      const category = await this.courseCategoryRepository.findOneBy({
+        id: courseDto.CourseCategoryId,
+      });
+      if (!category) {
+        throw new NotFoundException('Course category not found');
+      }
+      course.courseCategory = category;
+    }
+
+    // Update teacher if provided
+    if (courseDto.TeacherId) {
+      const teacher = await this.teacherRepository.findOneBy({
+        id: courseDto.TeacherId,
+        role: { id: 2 },
+      });
+      if (!teacher) {
+        throw new NotFoundException('Teacher not found');
+      }
+      course.teacher = teacher;
+    }
+
+    // Update course image if file provided
+    if (file) {
+      const uploadResult = await uploadToCloudinary(file);
+      course.coverImg = uploadResult.secure_url;
+    }
+
+    // Update other fields
+    if (courseDto.CourseName) {
+      // Check if course name already exists (excluding current course)
+      const existingCourse = await this.courseRepository.findOne({
+        where: {
+          courseName: courseDto.CourseName,
+        },
+      });
+      if (existingCourse && existingCourse.id !== courseId) {
+        throw new ConflictException('A course with this name already exists');
+      }
+      course.courseName = courseDto.CourseName;
+    }
+
+    if (courseDto.ShortDescription) {
+      course.shortDescription = courseDto.ShortDescription;
+    }
+
+    if (courseDto.Price) {
+      course.price = courseDto.Price;
+    }
+
+    if (courseDto.LongDescription !== undefined) {
+      course.longDescription = courseDto.LongDescription;
+    }
+
+    if (courseDto.Languages) {
+      course.languages = courseDto.Languages;
+    }
+
+    if (courseDto.isActive) {
+      course.isActive = courseDto.isActive;
+    }
+
+    course.updatedAt = new Date();
+    course.updatedBy = adminId as any;
+
+    const updatedCourse = await this.courseRepository.save(course);
+
+    // Return course with all relations and stats
+    return this.getCourseById(updatedCourse.id, adminId, 1);
   }
 }
