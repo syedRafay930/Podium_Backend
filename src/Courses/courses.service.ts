@@ -291,4 +291,14 @@ export class CourseService {
     // Return course with all relations and stats
     return this.getCourseById(updatedCourse.id, adminId, 1);
   }
+
+  async getAllCategories() {
+    const categories = await this.courseCategoryRepository.find({
+      order: {
+        id: 'ASC',
+      },
+    });
+
+    return categories;
+  }
 }

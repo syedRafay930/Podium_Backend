@@ -243,4 +243,35 @@ export class CourseController {
     }
     return this.courseService.updateCourse(courseId, courseDto, req.user.id, file);
   }
+
+  @Get('categories/all')
+  @ApiOperation({ 
+    summary: 'Get all course categories', 
+    description: 'Retrieve all course categories with course count. No authentication required.' 
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Categories retrieved successfully',
+    schema: {
+      example: [
+        {
+          id: 1,
+          name: 'Olevel',
+        },
+        {
+          id: 2,
+          name: 'Alevel',
+        },
+      ],
+    },
+  })
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error' 
+  })
+  async getAllCategories() {
+    return this.courseService.getAllCategories();
+  }
+
+  
 }
