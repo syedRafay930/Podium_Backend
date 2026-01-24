@@ -13,6 +13,8 @@ import { CourseCategory } from "./CourseCategory";
 import { Users } from "./Users";
 import { Enrollment } from "./Enrollment";
 import { Lectures } from "./Lectures";
+import { Resources } from "./Resources";
+import { Sections } from "./Sections";
 
 @Index("courses_pkey", ["id"], { unique: true })
 @Entity("courses", { schema: "public" })
@@ -54,6 +56,20 @@ export class Courses {
   @Column("boolean", { name: "is_active", nullable: true })
   isActive: boolean | null;
 
+  @Column("character varying", {
+    name: "teacher_status",
+    length: 20,
+    default: () => "'pending'",
+  })
+  teacherStatus: string;
+
+  @Column("character varying", {
+    name: "invitation_token",
+    nullable: true,
+    length: 255,
+  })
+  invitationToken: string | null;
+
   @OneToMany(() => Assignment, (assignment) => assignment.course)
   assignments: Assignment[];
 
@@ -81,4 +97,10 @@ export class Courses {
 
   @OneToMany(() => Lectures, (lectures) => lectures.course)
   lectures: Lectures[];
+
+  @OneToMany(() => Resources, (resources) => resources.course)
+  resources: Resources[];
+
+  @OneToMany(() => Sections, (sections) => sections.course)
+  sections: Sections[];
 }

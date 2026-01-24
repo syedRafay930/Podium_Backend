@@ -9,9 +9,11 @@ import {
 } from "typeorm";
 import { Courses } from "./Courses";
 import { Users } from "./Users";
+import { Sections } from "./Sections";
 import { AssignmentSubmission } from "./AssignmentSubmission";
 
 @Index("assignment_pkey", ["id"], { unique: true })
+@Index("idx_assignment_section_id", ["sectionId"], {})
 @Entity("assignment", { schema: "public" })
 export class Assignment {
   @PrimaryGeneratedColumn({ type: "integer", name: "id" })
@@ -53,6 +55,12 @@ export class Assignment {
   })
   createdAt: Date | null;
 
+  @Column("text", { name: "description", nullable: true })
+  description: string | null;
+
+  @Column("integer", { name: "section_id", nullable: true })
+  sectionId: number | null;
+
   @ManyToOne(() => Courses, (courses) => courses.assignments, {
     onDelete: "CASCADE",
   })
@@ -62,6 +70,12 @@ export class Assignment {
   @ManyToOne(() => Users, (users) => users.assignments, { onDelete: "CASCADE" })
   @JoinColumn([{ name: "created_by", referencedColumnName: "id" }])
   createdBy: Users;
+
+  @ManyToOne(() => Sections, (sections) => sections.assignments, {
+    onDelete: "SET NULL",
+  })
+  @JoinColumn([{ name: "section_id", referencedColumnName: "id" }])
+  section: Sections;
 
   @OneToMany(
     () => AssignmentSubmission,

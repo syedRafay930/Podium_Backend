@@ -10,6 +10,8 @@ import { CourseModule } from './Courses/courses.module';
 import { EnrollmentsModule } from './Enrollments/enrollments.module';
 import { AssignmentsModule } from './Assignments/assignments.module';
 import { FeesModule } from './Fees/fees.module';
+import { CourseManagementModule } from './CourseManagement/course-management.module';
+import { ResourcesModule } from './Resources/resources.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -43,6 +45,8 @@ import { FeesModule } from './Fees/fees.module';
     EnrollmentsModule,
     AssignmentsModule,
     FeesModule,
+    CourseManagementModule,
+    ResourcesModule,
   ],
 })
 export class AppModule {}
