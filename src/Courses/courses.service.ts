@@ -17,6 +17,9 @@ import { uploadToCloudinary } from 'src/Cloudinary/cloudinary.helper';
 import { EditCourseDto } from './dto/edit_course.dto';
 import { Assignment } from 'src/Entities/entities/Assignment';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
+import { v4 as uuidv4 } from 'uuid';
+import { MailService } from 'src/Nodemailer/mailer.service';
+import { RedisService } from 'src/Auth/redis.service';
 
 @Injectable()
 export class CourseService {
@@ -37,6 +40,8 @@ export class CourseService {
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    private readonly mailService: MailService,
+    private readonly redisService: RedisService,
   ) {}
 
   async createCourse(courseDto: AddCourseDto, adminId: number, file) {
@@ -71,16 +76,22 @@ export class CourseService {
       price: courseDto.Price,
       longDescription: courseDto.LongDescription ?? null,
       courseCategory: category,
-      teacher: teacher ?? undefined,
       createdAt: new Date(),
       createdBy: adminId as any,
       coverImg: coverImgUrl,
       languages: courseDto.Languages ?? null,
       isActive: true,
+      invitationToken: teacher ? uuidv4() : undefined,
     };
 
     const course = this.courseRepository.create(courseData);
-    return this.courseRepository.save(course);
+    const savedCourse = await this.courseRepository.save(course);
+
+    if (teacher) {
+      // Send notification to teacher about the new course assignment
+      await this.assignTeacherToCourse(savedCourse.id, teacher.id, adminId);
+    }
+    return savedCourse
   }
 
   async getAllCourses(
@@ -300,5 +311,144 @@ export class CourseService {
     });
 
     return categories;
+  }
+
+  // ==================== TEACHER ASSIGNMENT ====================
+
+  async assignTeacherToCourse(
+    courseId: number,
+    teacherId: number,
+    adminId: number,
+  ): Promise<{ message: string; invitationToken: string }> {
+    // Verify course exists
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+      relations: ['teacher'],
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Verify teacher exists and has teacher role
+    const teacher = await this.teacherRepository.findOne({
+      where: { id: teacherId, role: { id: 2 } },
+      relations: ['role'],
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found or invalid teacher role');
+    }
+
+    // Generate unique invitation token
+    const invitationToken = uuidv4();
+
+    // Update course with teacher and set status to pending
+    course.teacher = teacher;
+    course.teacherStatus = 'pending';
+    course.invitationToken = invitationToken;
+
+    await this.courseRepository.save(course);
+
+    // Store token in Redis with 24-hour expiry
+    await this.redisService.setValue(
+      `teacher-invite:${invitationToken}`,
+      JSON.stringify({
+        courseId,
+        teacherId,
+        courseName: course.courseName,
+      }),
+      86400, // 24 hours
+    );
+
+    // Send email to teacher
+    try {
+      const acceptLink = `http://localhost:3006/courses/${courseId}/teacher/action/${invitationToken}?action=accept`;
+      const rejectLink = `http://localhost:3006/courses/${courseId}/teacher/action/${invitationToken}?action=reject`;
+
+      await this.mailService.sendTemplatedMail(
+        teacher.email,
+        'Course Teaching Assignment - Action Required',
+        'teacher-assignment',
+        {
+          teacherName: `${teacher.firstName} ${teacher.lastName}`,
+          courseName: course.courseName,
+          courseDescription:
+            course.longDescription ||
+            course.shortDescription ||
+            'No description',
+          coursePrice: course.price || 'Free',
+          acceptLink,
+          rejectLink,
+        },
+      );
+    } catch (error) {
+      console.error('Failed to send teacher assignment email:', error);
+      // Don't throw error - assignment should succeed even if email fails
+    }
+
+    return {
+      message: `Teacher assigned to course. Invitation email sent to ${teacher.email}`,
+      invitationToken,
+    };
+  }
+
+  async handleTeacherAction(
+    courseId: number,
+    invitationToken: string,
+    action: 'accept' | 'reject',
+  ): Promise<{ message: string; courseName: string }> {
+    // Verify course exists
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+      relations: ['teacher'],
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Verify token exists in Redis
+    const tokenData = await this.redisService.getValue(
+      `teacher-invite:${invitationToken}`,
+    );
+
+    if (!tokenData) {
+      throw new NotFoundException('Invalid or expired invitation token');
+    }
+
+    // Verify token matches the course
+    const parsedData = JSON.parse(tokenData);
+    if (parsedData.courseId != courseId) {
+      throw new UnauthorizedException('Token does not match the course');
+    }
+
+    if (action === 'accept') {
+      course.teacherStatus = 'accepted';
+      await this.courseRepository.save(course);
+
+      // Delete token from Redis
+      await this.redisService.deleteValue(`teacher-invite:${invitationToken}`);
+
+      return { 
+        message: 'Course assignment accepted successfully!',
+        courseName: course.courseName,
+      };
+    } else if (action === 'reject') {
+      course.teacherStatus = 'rejected';
+      course.teacher = null;
+      course.invitationToken = null;
+      await this.courseRepository.save(course);
+
+      // Delete token from Redis
+      await this.redisService.deleteValue(`teacher-invite:${invitationToken}`);
+
+      return { 
+        message: 'Course assignment rejected',
+        courseName: course.courseName,
+      };
+    } else {
+      throw new UnauthorizedException('Invalid action');
+    }
   }
 }

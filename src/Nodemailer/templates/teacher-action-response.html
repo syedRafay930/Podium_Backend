@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Course Assignment {{statusText}}</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      
+      .container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        padding: 50px 40px;
+        max-width: 600px;
+        width: 100%;
+        text-align: center;
+      }
+      
+      .logo {
+        max-width: 150px;
+        height: auto;
+        margin-bottom: 30px;
+      }
+      
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 80px;
+        height: 80px;
+        background-color: {{statusColor}};
+        color: white;
+        border-radius: 50%;
+        font-size: 40px;
+        font-weight: bold;
+        margin: 0 auto 20px;
+      }
+      
+      .header {
+        font-size: 28px;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 15px;
+      }
+      
+      .message {
+        font-size: 18px;
+        color: {{statusColor}};
+        font-weight: bold;
+        margin-bottom: 20px;
+      }
+      
+      .details {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 30px 0;
+        text-align: left;
+        border-left: 4px solid {{statusColor}};
+      }
+      
+      .detail-item {
+        margin: 10px 0;
+        font-size: 16px;
+        color: #555;
+      }
+      
+      .detail-label {
+        font-weight: bold;
+        color: #2c3e50;
+      }
+      
+      .footer-text {
+        font-size: 14px;
+        color: #999;
+        margin-top: 30px;
+      }
+      
+      .success-message {
+        font-size: 16px;
+        color: #555;
+        line-height: 1.6;
+        margin: 20px 0;
+      }
+      
+      .close-btn {
+        background-color: #873ea9;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-top: 10px;
+        transition: background-color 0.3s ease;
+      }
+      
+      .close-btn:hover {
+        background-color: #763897;
+      }
+      
+      @media (max-width: 600px) {
+        .container {
+          padding: 30px 20px;
+        }
+        
+        .header {
+          font-size: 24px;
+        }
+        
+        .message {
+          font-size: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <img src="https://i.postimg.cc/j504skRw/podium.jpg" alt="Podium Logo" class="logo" />
+      
+      <div class="status-badge">{{statusIcon}}</div>
+      
+      <div class="header">Course Assignment {{statusText}}</div>
+      
+      <div class="message">{{message}}</div>
+      
+      <div class="details">
+        <div class="detail-item">
+          <span class="detail-label">Action:</span> {{statusText}}
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Course Name:</span> {{courseName}}
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Time:</span> {{timestamp}}
+        </div>
+      </div>
+      
+      <div class="success-message">
+        {{successMessage}}
+      </div>
+      
+      <div class="footer-text">
+        <p>© 2024 Podium Professional Education. All rights reserved.</p>
+        <p style="margin-top: 10px;">This page will close automatically in 5 seconds.</p>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+      </div>
+    </div>
+    
+    <script>
+      // Auto close after 5 seconds
+      setTimeout(() => {
+        window.close();
+      }, 5000);
+    </script>
+  </body>
+</html>

@@ -8,10 +8,12 @@ import { EnrollmentsController } from './enrollments.controller';
 import { AdminEnrollmentsController } from './admin-enrollments.controller';
 import { AuthModule } from '../Auth/auth.module';
 import { Transactions } from 'src/Entities/entities/Transactions';
+import { MailModule } from 'src/Nodemailer/mailer.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Enrollment, Courses, Users, Transactions]),
     AuthModule,
+    MailModule
   ],
   controllers: [EnrollmentsController, AdminEnrollmentsController],
   providers: [EnrollmentsService],

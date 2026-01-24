@@ -11,6 +11,7 @@ import { Courses } from 'src/Entities/entities/Courses';
 import { Users } from 'src/Entities/entities/Users';
 import { CourseRating } from 'src/Entities/entities/CourseRating';
 import { Transactions } from 'src/Entities/entities/Transactions';
+import { MailService } from 'src/Nodemailer/mailer.service';
 
 @Injectable()
 export class EnrollmentsService {
@@ -23,6 +24,7 @@ export class EnrollmentsService {
     private readonly usersRepository: Repository<Users>,
     @InjectRepository(Transactions)
     private readonly transactionRepository: Repository<Transactions>,
+    private readonly mailService: MailService,
   ) {}
 
   async enrollStudent(
@@ -84,7 +86,7 @@ export class EnrollmentsService {
 
     // Check if course is free (price is 0 or null)
     const coursePrice = course.price ? parseFloat(course.price) : 0;
-    if (coursePrice === 0 || course.price === null ) {
+    if (coursePrice === 0 || course.price === null) {
       finalPaymentStatus = 'free';
     } else {
       // Course has a price
@@ -105,6 +107,31 @@ export class EnrollmentsService {
       createdAt: new Date(),
     });
     await this.transactionRepository.save(transaction);
+
+    // Send enrollment email notification
+    try {
+      const enrollmentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      
+      await this.mailService.sendTemplatedMail(
+        student.email,
+        'Course Enrollment Confirmation - Podium',
+        'enrolled-student',
+        {
+          studentName: `${student.firstName} ${student.lastName}`,
+          courseName: course.courseName,
+          coursePrice: course.price || 'Free',
+          enrollmentDate,
+        },
+      );
+    } catch (error) {
+      console.error('Failed to send enrollment email:', error);
+      // Don't throw error - enrollment should succeed even if email fails
+    }
+
     return savedEnrollment;
   }
 
@@ -183,7 +210,10 @@ export class EnrollmentsService {
     return enrollment;
   }
 
-  async dismissStudent(enrollmentId: number, dismissDto: { status?: string }) : Promise<{ message: string }> {
+  async dismissStudent(
+    enrollmentId: number,
+    dismissDto: { status?: string },
+  ): Promise<{ message: string }> {
     const enrollment = await this.getEnrollmentById(enrollmentId);
     if (!enrollment) {
       throw new NotFoundException('Enrollment not found');

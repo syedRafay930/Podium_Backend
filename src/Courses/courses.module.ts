@@ -11,12 +11,21 @@ import { AuthModule } from '../Auth/auth.module';
 import { CloudinaryModule } from 'src/Cloudinary/cloudinary.module';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { Assignment } from 'src/Entities/entities/Assignment';
+import { MailModule } from 'src/Nodemailer/mailer.module';
+import { RedisModule } from '@nestjs-modules/ioredis';
+import { TemplateService } from './template.service';
 
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Courses, CourseRating, Users, CourseCategory, Lectures, Enrollment, Assignment]), AuthModule, CloudinaryModule],
+  imports: [
+    TypeOrmModule.forFeature([Courses, CourseRating, Users, CourseCategory, Lectures, Enrollment, Assignment]), 
+    AuthModule, 
+    CloudinaryModule,
+    MailModule,
+    RedisModule,
+  ],
   controllers: [CourseController],
-  providers: [CourseService],
+  providers: [CourseService, TemplateService],
   exports: [CourseService],
 })
 export class CourseModule {}

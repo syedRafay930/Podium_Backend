@@ -14,7 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../Auth/redis.service';
 import { Users } from 'src/Entities/entities/Users';
 import { UserRole } from 'src/Entities/entities/UserRole';
-//import { MailService } from 'src/Nodemailer/mailer.service';
+import { MailService } from 'src/Nodemailer/mailer.service';
 import { ILike } from 'typeorm';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { EditStudentDto } from './dto/edit-student.dto';
@@ -33,7 +33,7 @@ export class UsersService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
-    //private readonly mailService: MailService,
+    private readonly mailService: MailService,
   ) {}
 
   async findByEmail(email: string): Promise<Users | null> {
@@ -54,6 +54,22 @@ export class UsersService {
         { hashedPassword: newPassword , updatedAt: new Date() , updatedBy: user},        
       );
     }
+  }
+
+  // Helper method to generate password reset token and link
+  private async generateResetLink(email: string): Promise<string> {
+    const token = this.jwtService.sign(
+      { sub: email },
+      {
+        secret: this.configService.get<string>('RESET_SECRET'),
+        expiresIn: '5m',
+      },
+    );
+
+    await this.redisService.setValue(`forgot:${token}`, email, 300); // 5 mins
+
+    const resetLink = `http://localhost:3000/resetpassword/${token}`;
+    return resetLink;
   }
 
   // ==================== STUDENT CRUD ====================
@@ -81,7 +97,8 @@ export class UsersService {
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(createStudentDto.password, 10);
+    const tempPassword = `${Date.now().toString(36)}`;
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
     // Create student
     const student = this.usersRepository.create({
@@ -96,7 +113,28 @@ export class UsersService {
       createdAt: new Date(),
     });
 
-    return this.usersRepository.save(student);
+    const savedStudent = await this.usersRepository.save(student);
+
+    // Send onboarding email with credentials
+    try {
+      const resetLink = await this.generateResetLink(createStudentDto.email);
+      await this.mailService.sendTemplatedMail(
+        createStudentDto.email,
+        'Welcome to Podium - Student Account Created',
+        'user-onboarded',
+        {
+          userName: `${createStudentDto.firstName} ${createStudentDto.lastName}`,
+          userRole: 'Student',
+          email: createStudentDto.email,
+          password: tempPassword,
+          resetLink,
+        },
+      );
+    } catch (error) {
+      console.error('Failed to send student onboarding email:', error);
+    }
+
+    return savedStudent;
   }
 
   async getAllStudents(page: number = 1, limit: number = 10): Promise<any> {
@@ -214,8 +252,9 @@ export class UsersService {
       throw new NotFoundException('Teacher role not found');
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(createTeacherDto.password, 10);
+    // Generate temporary password
+    const tempPassword = `${Date.now().toString(36)}`;
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
     // Create teacher
     const teacher = this.usersRepository.create({
@@ -230,7 +269,29 @@ export class UsersService {
       createdAt: new Date(),
     });
 
-    return this.usersRepository.save(teacher);
+    const savedTeacher = await this.usersRepository.save(teacher);
+
+    // Send onboarding email with credentials
+    try {
+      const resetLink = await this.generateResetLink(createTeacherDto.email);
+      await this.mailService.sendTemplatedMail(
+        createTeacherDto.email,
+        'Welcome to Podium - Teacher Account Created',
+        'user-onboarded',
+        {
+          userName: `${createTeacherDto.firstName} ${createTeacherDto.lastName}`,
+          userRole: 'Teacher',
+          email: createTeacherDto.email,
+          password: tempPassword,
+          resetLink,
+        },
+      );
+    } catch (error) {
+      console.error('Failed to send teacher onboarding email:', error);
+      // Don't throw error - teacher creation should succeed even if email fails
+    }
+
+    return savedTeacher;
   }
 
   async getAllTeachers(page: number = 1, limit: number = 10): Promise<any> {

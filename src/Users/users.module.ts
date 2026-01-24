@@ -5,7 +5,7 @@ import { UsersController } from './users.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { AuthModule } from '../Auth/auth.module';
-//import { MailModule } from 'src/Nodemailer/mailer.module';
+import { MailModule } from 'src/Nodemailer/mailer.module';
 import { Users } from 'src/Entities/entities/Users';
 import { UserRole } from 'src/Entities/entities/UserRole';
 @Module({
@@ -13,7 +13,7 @@ import { UserRole } from 'src/Entities/entities/UserRole';
     TypeOrmModule.forFeature([Users, UserRole]),
     JwtModule.register({}),
     RedisModule,
-    //MailModule,
+    MailModule,
     forwardRef(() => AuthModule),
   ],
   providers: [UsersService],

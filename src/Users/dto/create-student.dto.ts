@@ -39,16 +39,6 @@ export class CreateStudentDto {
   email: string;
 
   @ApiProperty({
-    description: 'Student password (min 6 characters)',
-    example: 'SecurePassword123',
-    type: String,
-  })
-  @IsNotEmpty()
-  @IsString()
-  @MinLength(6)
-  password: string;
-
-  @ApiProperty({
     description: 'Student contact number',
     example: '+923001234567',
     type: String,

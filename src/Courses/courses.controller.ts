@@ -26,16 +26,21 @@ import {
 import { CourseService } from './courses.service';
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { TemplateService } from './template.service';
 import { AddCourseDto } from './dto/add_course.dto';
 import { UploadedFile } from '@nestjs/common';
 import { CourseResponseDto } from 'src/common/dto/responses/course-response.dto';
 import { PaginatedCoursesResponseDto } from 'src/common/dto/responses/paginated-courses-response.dto';
 import { EditCourseDto } from './dto/edit_course.dto';
+import { Res } from '@nestjs/common';
 
 @ApiTags('Courses')
 @Controller('courses')
 export class CourseController {
-  constructor(private readonly courseService: CourseService) {}
+  constructor(
+    private readonly courseService: CourseService,
+    private readonly templateService: TemplateService,
+  ) {}
 
   @UseGuards(JwtBlacklistGuard)
   @Post('create')
@@ -273,5 +278,153 @@ export class CourseController {
     return this.courseService.getAllCategories();
   }
 
-  
+  @UseGuards(JwtBlacklistGuard)
+  @Post('assign-teacher/:courseId/:teacherId')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiParam({ 
+    name: 'courseId', 
+    type: 'number', 
+    description: 'Course ID' 
+  })
+  @ApiParam({ 
+    name: 'teacherId', 
+    type: 'number', 
+    description: 'Teacher ID (User with role_id = 2)' 
+  })
+  @ApiOperation({ 
+    summary: 'Assign teacher to course', 
+    description: 'Admin assigns a teacher to a course. Sets teacher_status to pending and sends email invitation to teacher with accept/reject buttons.' 
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Teacher assigned successfully',
+    schema: {
+      example: {
+        message: 'Teacher assigned to course. Invitation email sent to teacher@example.com',
+        invitationToken: 'uuid-token-here',
+      },
+    },
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - Invalid or missing JWT token' 
+  })
+  @ApiResponse({ 
+    status: 403, 
+    description: 'Forbidden - Only admins can assign teachers' 
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Not found - Course or teacher not found' 
+  })
+  async assignTeacher(
+    @Request() req,
+    @Param('courseId') courseId: number,
+    @Param('teacherId') teacherId: number,
+  ) {
+    if (req.user.role_id !== 1) {
+      throw new UnauthorizedException('Only admins can assign teachers to courses');
+    }
+    return this.courseService.assignTeacherToCourse(courseId, teacherId, req.user.id);
+  }
+
+  @Get(':courseId/teacher/action/:token')
+  @HttpCode(HttpStatus.OK)
+  @ApiParam({ 
+    name: 'courseId', 
+    type: 'number', 
+    description: 'Course ID' 
+  })
+  @ApiParam({ 
+    name: 'token', 
+    type: 'string', 
+    description: 'Invitation token from email' 
+  })
+  @ApiQuery({ 
+    name: 'action', 
+    type: 'string', 
+    enum: ['accept', 'reject'],
+    description: 'Accept or reject the course assignment' 
+  })
+  @ApiOperation({ 
+    summary: 'Handle teacher course assignment action (Email Link)', 
+    description: 'Teacher accepts or rejects course assignment via email link. Returns HTML response.' 
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Action completed successfully - returns HTML page' 
+  })
+  async handleTeacherActionFromEmail(
+    @Param('courseId') courseId: number,
+    @Param('token') token: string,
+    @Query('action') action: 'accept' | 'reject',
+    @Res() response,
+  ) {
+    const result = await this.courseService.handleTeacherAction(courseId, token, action);
+    
+    const isAccepted = action === 'accept';
+    const statusColor = isAccepted ? '#28a745' : '#dc3545';
+    const statusIcon = isAccepted ? '✓' : '✗';
+    const statusText = isAccepted ? 'Accepted' : 'Rejected';
+    const successMessage = isAccepted 
+      ? '<p>✓ Thank you for accepting this course assignment! You can now access the course dashboard and start managing course content.</p>' 
+      : '<p>✗ Your rejection has been recorded. The admin will be notified and will find another instructor for this course.</p>';
+    
+    const html = this.templateService.renderTemplate('teacher-action-response', {
+      statusColor,
+      statusIcon,
+      statusText,
+      message: result.message,
+      courseId: courseId.toString(),
+      courseName: result.courseName,
+      timestamp: new Date().toLocaleString(),
+      successMessage,
+    });
+    
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return response.send(html);
+  }
+
+  @Patch(':courseId/teacher/action/:token')
+  @HttpCode(HttpStatus.OK)
+  @ApiParam({ 
+    name: 'courseId', 
+    type: 'number', 
+    description: 'Course ID' 
+  })
+  @ApiParam({ 
+    name: 'token', 
+    type: 'string', 
+    description: 'Invitation token from email' 
+  })
+  @ApiQuery({ 
+    name: 'action', 
+    type: 'string', 
+    enum: ['accept', 'reject'],
+    description: 'Accept or reject the course assignment' 
+  })
+  @ApiOperation({ 
+    summary: 'Handle teacher course assignment action (API)', 
+    description: 'Teacher accepts or rejects course assignment. Returns JSON response.' 
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Action completed successfully' 
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'Invalid or expired invitation token' 
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Token does not match the course' 
+  })
+  async handleTeacherAction(
+    @Param('courseId') courseId: number,
+    @Param('token') token: string,
+    @Query('action') action: 'accept' | 'reject',
+  ) {
+    return await this.courseService.handleTeacherAction(courseId, token, action);
+  }
 }

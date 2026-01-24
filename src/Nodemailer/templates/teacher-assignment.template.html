@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Course Teaching Assignment - Action Required</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 100px 60px;
+      }
+
+      .parentBody {
+        max-width: 600px;
+        margin: auto;
+        background-color: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 12px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+        padding: 40px;
+        text-align: center;
+      }
+
+      .logo {
+        max-width: 200px;
+        height: auto;
+        display: block;
+        margin: 0 auto 10px auto;
+      }
+
+      .logo-title {
+        font-size: 22px;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 30px;
+      }
+
+      .email-header {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        color: #333333;
+      }
+
+      .email-body {
+        font-size: 16px;
+        color: #555;
+        line-height: 1.6;
+        margin-bottom: 20px;
+        text-align: left;
+      }
+
+      .course-info {
+        background-color: #f8f9fa;
+        border-left: 4px solid #873ea9;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 5px;
+        text-align: left;
+      }
+
+      .course-info strong {
+        color: #873ea9;
+      }
+
+      .action-section {
+        margin: 30px 0;
+        text-align: center;
+      }
+
+      .action-text {
+        font-size: 16px;
+        color: #333;
+        margin-bottom: 20px;
+        font-weight: bold;
+      }
+
+      .button-container {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin: 20px 0;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 12px 25px;
+        border-radius: 5px;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 16px;
+        transition: all 0.3s ease;
+      }
+
+      .btn-accept {
+        background-color: #28a745;
+        color: #ffffff;
+      }
+
+      .btn-accept:hover {
+        background-color: #218838;
+      }
+
+      .btn-reject {
+        background-color: #dc3545;
+        color: #ffffff;
+      }
+
+      .btn-reject:hover {
+        background-color: #c82333;
+      }
+
+      .security-note {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 12px;
+        margin: 20px 0;
+        border-radius: 4px;
+        font-size: 14px;
+        color: #856404;
+      }
+
+      .timeline-note {
+        background-color: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 12px;
+        margin: 20px 0;
+        border-radius: 4px;
+        font-size: 14px;
+        color: #1565c0;
+      }
+
+      .footer {
+        font-size: 12px;
+        color: #999;
+        margin-top: 30px;
+        border-top: 1px solid #eee;
+        padding-top: 20px;
+      }
+
+      .divider {
+        height: 1px;
+        background-color: #ddd;
+        margin: 20px 0;
+      }
+
+      @media (max-width: 600px) {
+        .parentBody {
+          padding: 20px;
+        }
+
+        body {
+          padding: 20px;
+        }
+
+        .button-container {
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .btn {
+          width: 100%;
+          box-sizing: border-box;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="parentBody">
+      <!-- Logo -->
+      <img
+        src="https://i.postimg.cc/j504skRw/podium.jpg"
+        alt="Podium Logo"
+        class="logo"
+      />
+
+      <!-- Logo Title -->
+      <div class="logo-title">Podium Professional Education</div>
+
+      <!-- Email Content -->
+      <div class="email-header">📚 Course Teaching Assignment</div>
+
+      <div class="email-body">
+        <p>Hello <strong>{{teacherName}}</strong>,</p>
+        <p>
+          Great news! You have been assigned to teach a new course on
+          <strong>Podium Professional Education</strong>.
+        </p>
+        <p>
+          Please review the course details below and take action to either accept or reject this
+          assignment.
+        </p>
+      </div>
+
+      <!-- Course Info Box -->
+      <div class="course-info">
+        <div style="margin-bottom: 12px;">
+          <strong>Course Name:</strong> {{courseName}}<br />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <strong>Description:</strong> {{courseDescription}}<br />
+        </div>
+        <div>
+          <strong>Price:</strong> {{coursePrice}}<br />
+        </div>
+      </div>
+
+      <!-- Action Section -->
+      <div class="action-section">
+        <div class="action-text">What would you like to do?</div>
+        <div class="button-container">
+          <a href="{{acceptLink}}" class="btn btn-accept">✓ Accept</a>
+          <a href="{{rejectLink}}" class="btn btn-reject">✗ Reject</a>
+        </div>
+      </div>
+
+      <!-- Timeline Note -->
+      <div class="timeline-note">
+        ⏰ <strong>Important:</strong> This invitation link expires in
+        <strong>24 hours</strong>. Please respond before the deadline.
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Additional Info -->
+      <div class="email-body">
+        <p>
+          <strong>If you accept:</strong> You will be able to manage course content, create
+          lectures, assignments, and interact with enrolled students.
+        </p>
+        <p>
+          <strong>If you reject:</strong> The course assignment will be cancelled and admin will
+          be notified to find another instructor.
+        </p>
+      </div>
+
+      <!-- Security Note -->
+      <div class="security-note">
+        🔒 <strong>Security:</strong> Never share these links. This action uses a secure token
+        that expires after your response.
+      </div>
+
+      <div class="footer">
+        <p>
+          <strong>Need Help?</strong> Contact our support team if you have any questions.<br />
+          © 2024 Podium Professional Education. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

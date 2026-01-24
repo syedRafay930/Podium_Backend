@@ -54,6 +54,20 @@ export class Courses {
   @Column("boolean", { name: "is_active", nullable: true })
   isActive: boolean | null;
 
+  @Column("character varying", {
+    name: "teacher_status",
+    length: 20,
+    default: () => "'pending'",
+  })
+  teacherStatus: string;
+
+  @Column("character varying", {
+    name: "invitation_token",
+    nullable: true,
+    length: 255,
+  })
+  invitationToken: string | null;
+
   @OneToMany(() => Assignment, (assignment) => assignment.course)
   assignments: Assignment[];
 
@@ -70,7 +84,7 @@ export class Courses {
 
   @ManyToOne(() => Users, (users) => users.courses2)
   @JoinColumn([{ name: "teacher_id", referencedColumnName: "id" }])
-  teacher: Users;
+  teacher: Users | null;
 
   @ManyToOne(() => Users, (users) => users.courses3)
   @JoinColumn([{ name: "updated_by", referencedColumnName: "id" }])
