@@ -14,6 +14,8 @@ import { CourseRating } from "./CourseRating";
 import { Courses } from "./Courses";
 import { Enrollment } from "./Enrollment";
 import { Lectures } from "./Lectures";
+import { Resources } from "./Resources";
+import { Sections } from "./Sections";
 import { UserRole } from "./UserRole";
 
 @Index("users_email_key", ["email"], { unique: true })
@@ -117,6 +119,18 @@ export class Users {
 
   @OneToMany(() => Lectures, (lectures) => lectures.updatedBy)
   lectures2: Lectures[];
+
+  @OneToMany(() => Resources, (resources) => resources.createdBy2)
+  resources: Resources[];
+
+  @OneToMany(() => Resources, (resources) => resources.updatedBy2)
+  resources2: Resources[];
+
+  @OneToMany(() => Sections, (sections) => sections.createdBy2)
+  sections: Sections[];
+
+  @OneToMany(() => Sections, (sections) => sections.updatedBy2)
+  sections2: Sections[];
 
   @ManyToOne(() => Users, (users) => users.users, { onDelete: "SET NULL" })
   @JoinColumn([{ name: "created_by", referencedColumnName: "id" }])

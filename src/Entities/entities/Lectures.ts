@@ -8,6 +8,7 @@ import {
 } from "typeorm";
 import { Courses } from "./Courses";
 import { Users } from "./Users";
+import { Sections } from "./Sections";
 
 @Index("lectures_pkey", ["id"], { unique: true })
 @Entity("lectures", { schema: "public" })
@@ -73,6 +74,12 @@ export class Lectures {
   @ManyToOne(() => Users, (users) => users.lectures, { onDelete: "SET NULL" })
   @JoinColumn([{ name: "created_by", referencedColumnName: "id" }])
   createdBy: Users;
+
+  @ManyToOne(() => Sections, (sections) => sections.lectures, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn([{ name: "section_id", referencedColumnName: "id" }])
+  section: Sections;
 
   @ManyToOne(() => Users, (users) => users.lectures2, { onDelete: "SET NULL" })
   @JoinColumn([{ name: "updated_by", referencedColumnName: "id" }])

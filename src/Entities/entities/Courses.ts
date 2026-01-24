@@ -13,6 +13,8 @@ import { CourseCategory } from "./CourseCategory";
 import { Users } from "./Users";
 import { Enrollment } from "./Enrollment";
 import { Lectures } from "./Lectures";
+import { Resources } from "./Resources";
+import { Sections } from "./Sections";
 
 @Index("courses_pkey", ["id"], { unique: true })
 @Entity("courses", { schema: "public" })
@@ -95,4 +97,10 @@ export class Courses {
 
   @OneToMany(() => Lectures, (lectures) => lectures.course)
   lectures: Lectures[];
+
+  @OneToMany(() => Resources, (resources) => resources.course)
+  resources: Resources[];
+
+  @OneToMany(() => Sections, (sections) => sections.course)
+  sections: Sections[];
 }
