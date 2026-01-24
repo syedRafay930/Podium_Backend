@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ResourceListResponseDto } from 'src/Resources/dto/resource-list-response.dto';
 
 export class UserBasicDto {
   @ApiProperty({ description: 'User ID', example: 1 })
@@ -22,9 +21,6 @@ export class SectionResponseDto {
   @ApiProperty({ description: 'Section description', example: 'This section covers the basics', required: false })
   description: string | null;
 
-  @ApiProperty({ description: 'Parent section ID (null for top-level sections)', example: null, required: false })
-  parentSectionId: number | null;
-
   @ApiProperty({ description: 'Course ID', example: 1, required: false })
   courseId: number | null;
 
@@ -39,11 +35,4 @@ export class SectionResponseDto {
 
   @ApiProperty({ description: 'Updater information', type: UserBasicDto, required: false })
   updatedBy?: UserBasicDto;
-
-  @ApiProperty({ description: 'List of subsections', type: [SectionResponseDto], required: false })
-  subsections?: SectionResponseDto[];
-
-  @ApiProperty({ description: 'List of resources', type: [ResourceListResponseDto], required: false })
-  resources?: ResourceListResponseDto[];
 }
-

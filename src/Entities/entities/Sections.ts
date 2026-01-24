@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
 } from "typeorm";
 import { Assignment } from "./Assignment";
+import { Lectures } from "./Lectures";
 import { Resources } from "./Resources";
 import { Courses } from "./Courses";
 import { Users } from "./Users";
@@ -15,7 +16,6 @@ import { Users } from "./Users";
 @Index("idx_sections_course_id", ["courseId"], {})
 @Index("idx_sections_created_by", ["createdBy"], {})
 @Index("sections_pkey", ["id"], { unique: true })
-@Index("idx_sections_parent_section_id", ["parentSectionId"], {})
 @Index("idx_sections_updated_by", ["updatedBy"], {})
 @Entity("sections", { schema: "public" })
 export class Sections {
@@ -27,9 +27,6 @@ export class Sections {
 
   @Column("text", { name: "description", nullable: true })
   description: string | null;
-
-  @Column("integer", { name: "parent_section_id", nullable: true })
-  parentSectionId: number | null;
 
   @Column("integer", { name: "course_id", nullable: true })
   courseId: number | null;
@@ -53,6 +50,9 @@ export class Sections {
   @OneToMany(() => Assignment, (assignment) => assignment.section)
   assignments: Assignment[];
 
+  @OneToMany(() => Lectures, (lectures) => lectures.section)
+  lectures: Lectures[];
+
   @OneToMany(() => Resources, (resources) => resources.section)
   resources: Resources[];
 
@@ -65,15 +65,6 @@ export class Sections {
   @ManyToOne(() => Users, (users) => users.sections, { onDelete: "SET NULL" })
   @JoinColumn([{ name: "created_by", referencedColumnName: "id" }])
   createdBy2: Users;
-
-  @ManyToOne(() => Sections, (sections) => sections.sections, {
-    onDelete: "CASCADE",
-  })
-  @JoinColumn([{ name: "parent_section_id", referencedColumnName: "id" }])
-  parentSection: Sections;
-
-  @OneToMany(() => Sections, (sections) => sections.parentSection)
-  sections: Sections[];
 
   @ManyToOne(() => Users, (users) => users.sections2, { onDelete: "SET NULL" })
   @JoinColumn([{ name: "updated_by", referencedColumnName: "id" }])

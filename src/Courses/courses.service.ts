@@ -161,48 +161,7 @@ export class CourseService {
       averageRating: Number(ratingStats.average) || 0,
     };
 
-    // For admin (role_id = 1) and teacher (role_id = 2)
-    if (userRole === 1 || userRole === 2) {
-      // Get all enrollments with student details
-      const enrollments = await this.enrollmentRepository.find({
-        where: { courseId },
-        relations: ['student'],
-      });
-
-      // Get all assignments for this course
-      const assignments = await this.assignmentRepository.find({
-        where: { course: { id: courseId } },
-      });
-
-      // Get all lectures for this course
-      const lectures = await this.lecturesRepository.find({
-        where: { course: { id: courseId } },
-      });
-
-      return {
-        ...baseResponse,
-        assignments,
-        enrollments,
-        enrollmentCount: enrollments.length,
-        lectures,
-      };
-    }
-
-    // For students (role_id = 3) - only return lectures and assignments
-    const assignments = await this.assignmentRepository.find({
-      where: { course: { id: courseId } },
-    });
-
-    // Get all lectures for this course
-    const lectures = await this.lecturesRepository.find({
-      where: { course: { id: courseId } },
-    });
-
-    return {
-      ...baseResponse,
-      assignments,
-      lectures,
-    };
+    return baseResponse;
   }
 
   async updateCourse(

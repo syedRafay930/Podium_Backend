@@ -24,10 +24,10 @@ import { ResourcesModule } from './Resources/resources.module';
       type: 'postgres',
       url: process.env.DATABASE_URL,
       ssl: {
-        rejectUnauthorized: false, 
+        rejectUnauthorized: false,
       },
       autoLoadEntities: true,
-      synchronize: false, 
+      synchronize: false,
     }),
 
     RedisModule.forRootAsync({
