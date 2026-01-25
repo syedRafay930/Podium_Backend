@@ -10,6 +10,7 @@ import { MailModule } from 'src/Nodemailer/mailer.module';
 import { Users } from 'src/Entities/entities/Users';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RBACModule } from '../RBAC/rbac.module';
+import { JwtBlacklistGuard } from './guards/jwt.guards';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Users]),
@@ -24,8 +25,8 @@ import { RBACModule } from '../RBAC/rbac.module';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy , RedisService],
+  providers: [AuthService, JwtStrategy , RedisService, JwtBlacklistGuard],
   controllers: [AuthController],
-  exports: [RedisService , JwtModule, AuthService]
+  exports: [RedisService , JwtModule, AuthService, JwtBlacklistGuard],
 })
 export class AuthModule {}

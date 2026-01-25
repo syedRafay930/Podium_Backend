@@ -33,6 +33,7 @@ async function bootstrap() {
     .addTag('Auth', 'Authentication endpoints for user login, logout, and password management')
     .addTag('Courses', 'Course management endpoints for creating, viewing, and managing courses')
     .addTag('RBAC', 'Role-Based Access Control endpoints for managing modules and permissions')
+    .addTag('Google Calendar', 'Google Calendar integration endpoints for teachers to connect, sync calendars, and create events with Google Meet')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
