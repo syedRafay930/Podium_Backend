@@ -13,6 +13,7 @@ import { FeesModule } from './Fees/fees.module';
 import { CourseManagementModule } from './CourseManagement/course-management.module';
 import { ResourcesModule } from './Resources/resources.module';
 import { GoogleCalendarModule } from './GoogleCalendar/google-calendar.module';
+import { LecturesModule } from './Lectures/lectures.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -49,6 +50,7 @@ import { GoogleCalendarModule } from './GoogleCalendar/google-calendar.module';
     CourseManagementModule,
     ResourcesModule,
     GoogleCalendarModule,
+    LecturesModule,
   ],
 })
 export class AppModule {}

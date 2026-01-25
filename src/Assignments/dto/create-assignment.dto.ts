@@ -78,5 +78,14 @@ export class CreateAssignmentDto {
   @IsNotEmpty()
   @IsNumber()
   courseId: number;
+
+  @ApiProperty({
+    description: 'Section ID for the assignment',
+    example: 1,
+    type: Number,
+  })
+  @IsOptional()
+  @IsNumber()
+  sectionId: number;
 }
 

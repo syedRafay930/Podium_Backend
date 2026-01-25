@@ -265,6 +265,7 @@ export class AssignmentsService {
       dueDate: createDto.dueDate ? new Date(createDto.dueDate) : null,
       course: course,
       createdBy: userId as any,
+      sectionId: createDto.sectionId || null,
       createdAt: new Date(),
     });
 
@@ -295,17 +296,20 @@ export class AssignmentsService {
     });
 
     if (enrollments.length > 0) {
-      const submissionData = enrollments.map(enrollment => ({
-        assignment_id: savedAssignment.id,
-        student_id: enrollment.student.id,
-        status: AssignmentSubmissionStatus.MISSING,
-        submitted_at: null,
-        marks_obtained: null,
-        submission_file: null,
-        comments: null,
-      }));
+      const submissionPromises = enrollments.map(enrollment => {
+        const submission = this.assignmentSubmissionRepository.create({
+          assignment: savedAssignment,
+          student: enrollment.student,
+          status: AssignmentSubmissionStatus.MISSING,
+          submittedAt: null,
+          marksObtained: null,
+          submissionFile: null,
+          comments: null,
+        });
+        return this.assignmentSubmissionRepository.save(submission);
+      });
 
-      await this.assignmentSubmissionRepository.insert(submissionData);
+      await Promise.all(submissionPromises);
     }
 
     const assignmentWithRelations = await this.assignmentRepository.findOne({
