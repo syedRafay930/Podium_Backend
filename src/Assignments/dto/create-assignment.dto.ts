@@ -71,18 +71,6 @@ export class CreateAssignmentDto {
   dueDate?: string;
 
   @ApiProperty({
-    description:
-      'File URL for assignment materials. Optional if a file is uploaded directly. If both file upload and fileUrl are provided, the uploaded file takes precedence.',
-    example: 'https://example.com/assignment.pdf',
-    type: String,
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  fileUrl?: string;
-
-  @ApiProperty({
     description: 'Course ID for the assignment',
     example: 1,
     type: Number,

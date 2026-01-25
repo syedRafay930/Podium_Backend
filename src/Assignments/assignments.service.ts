@@ -8,13 +8,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DeepPartial } from 'typeorm';
 import { Assignment } from 'src/Entities/entities/Assignment';
 import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
+import { AssignmentMaterial } from 'src/Entities/entities/AssignmentMaterial';
 import { Courses } from 'src/Entities/entities/Courses';
 import { Users } from 'src/Entities/entities/Users';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { AssignmentSubmissionStatus } from './dto/assignment-status.enum';
-import { AssignmentDetailResponseDto } from './dto/assignment-detail-response.dto';
-import { validateSubmissionFile, sanitizeFilename } from './utils/file-validator.util';
+import { AssignmentDetailResponseDto, AssignmentMaterialDto } from './dto/assignment-detail-response.dto';
+import { AssignmentResponseDto, AssignmentMaterialBasicDto } from './dto/assignment-response.dto';
+import { validateFiles, sanitizeFilename, parseSubmissionFiles } from './utils/file-validator.util';
 import { uploadDocumentToCloudinary } from 'src/Cloudinary/cloudinary.helper';
 import { SubmissionResponseDto } from './dto/submission-response.dto';
 import { PaginatedSubmissionsResponseDto, StudentSubmissionDto } from './dto/assignment-submissions-response.dto';
@@ -27,6 +29,8 @@ export class AssignmentsService {
     private readonly assignmentRepository: Repository<Assignment>,
     @InjectRepository(AssignmentSubmission)
     private readonly assignmentSubmissionRepository: Repository<AssignmentSubmission>,
+    @InjectRepository(AssignmentMaterial)
+    private readonly assignmentMaterialRepository: Repository<AssignmentMaterial>,
     @InjectRepository(Courses)
     private readonly courseRepository: Repository<Courses>,
     @InjectRepository(Users)
@@ -47,6 +51,7 @@ export class AssignmentsService {
       .createQueryBuilder('assignment')
       .leftJoinAndSelect('assignment.course', 'course')
       .leftJoinAndSelect('assignment.createdBy', 'createdBy')
+      .leftJoinAndSelect('assignment.assignmentMaterials', 'materials')
       .select([
         'assignment.id',
         'assignment.title',
@@ -55,13 +60,17 @@ export class AssignmentsService {
         'assignment.format',
         'assignment.totalMarks',
         'assignment.dueDate',
-        'assignment.fileUrl',
         'assignment.createdAt',
         'course.id',
         'course.courseName',
         'createdBy.id',
         'createdBy.firstName',
         'createdBy.lastName',
+        'materials.id',
+        'materials.fileUrl',
+        'materials.fileName',
+        'materials.fileSize',
+        'materials.fileType',
       ]);
 
     // Role-based filtering
@@ -180,11 +189,45 @@ export class AssignmentsService {
 
     const total = await countQuery.getCount();
 
+    // Map assignments to DTOs with materials
+    const assignmentDtos: AssignmentResponseDto[] = assignments.map((assignment) => {
+      const materials: AssignmentMaterialBasicDto[] = assignment.assignmentMaterials?.map(
+        (material) => ({
+          id: material.id,
+          fileUrl: material.fileUrl,
+          fileName: material.fileName,
+          fileSize: material.fileSize,
+          fileType: material.fileType,
+        }),
+      ) || [];
+
+      return {
+        id: assignment.id,
+        title: assignment.title,
+        objective: assignment.objective,
+        deliverable: assignment.deliverable,
+        format: assignment.format,
+        totalMarks: assignment.totalMarks,
+        dueDate: assignment.dueDate,
+        createdAt: assignment.createdAt,
+        materials: materials,
+        course: {
+          id: assignment.course.id,
+          courseName: assignment.course.courseName,
+        },
+        createdBy: {
+          id: assignment.createdBy.id,
+          firstName: assignment.createdBy.firstName,
+          lastName: assignment.createdBy.lastName,
+        },
+      };
+    });
+
     return {
-      data: assignments,
+      data: assignmentDtos,
       meta: {
         totalItems: total,
-        itemCount: assignments.length,
+        itemCount: assignmentDtos.length,
         itemsPerPage: limit,
         totalPages: Math.ceil(total / limit),
         currentPage: page,
@@ -196,7 +239,7 @@ export class AssignmentsService {
     createDto: CreateAssignmentDto,
     userId: number,
     roleId: number,
-    file?: Express.Multer.File,
+    files?: Express.Multer.File[],
   ) {
     // Check if user is admin or teacher
     if (roleId !== 1 && roleId !== 2) {
@@ -222,17 +265,9 @@ export class AssignmentsService {
       }
     }
 
-    // Handle file upload - if file is provided, upload to Cloudinary; otherwise use fileUrl from DTO
-    let fileUrl: string | null = null;
-    if (file) {
-      try {
-        const uploadResult = await uploadDocumentToCloudinary(file);
-        fileUrl = uploadResult.secure_url;
-      } catch (error) {
-        throw new BadRequestException('Failed to upload file. Please try again.');
-      }
-    } else if (createDto.fileUrl) {
-      fileUrl = createDto.fileUrl;
+    // Validate files if provided
+    if (files && files.length > 0) {
+      validateFiles(files);
     }
 
     // Create assignment
@@ -243,13 +278,34 @@ export class AssignmentsService {
       format: createDto.format || null,
       totalMarks: createDto.totalMarks || null,
       dueDate: createDto.dueDate ? new Date(createDto.dueDate) : null,
-      fileUrl: fileUrl,
       course: course,
       createdBy: userId as any,
       createdAt: new Date(),
     });
 
     const savedAssignment = await this.assignmentRepository.save(assignment);
+
+    // Upload files and create AssignmentMaterial records
+    if (files && files.length > 0) {
+      const materialPromises = files.map(async (file) => {
+        // Upload file to Cloudinary
+        const uploadResult = await uploadDocumentToCloudinary(file);
+        
+        // Create AssignmentMaterial record
+        const material = this.assignmentMaterialRepository.create({
+          assignmentId: savedAssignment.id,
+          fileUrl: uploadResult.secure_url,
+          fileName: sanitizeFilename(file.originalname),
+          fileSize: file.size,
+          fileType: file.mimetype,
+          createdAt: new Date(),
+        });
+
+        return this.assignmentMaterialRepository.save(material);
+      });
+
+      await Promise.all(materialPromises);
+    }
 
     // Get all enrolled students for this course
     const enrollments = await this.enrollmentRepository.find({
@@ -275,7 +331,7 @@ export class AssignmentsService {
     // Return assignment with relations
     const assignmentWithRelations = await this.assignmentRepository.findOne({
       where: { id: savedAssignment.id },
-      relations: ['course', 'createdBy'],
+      relations: ['course', 'createdBy', 'assignmentMaterials'],
     });
 
     return assignmentWithRelations;
@@ -314,7 +370,7 @@ export class AssignmentsService {
     // Fetch assignment with all relations
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
-      relations: ['course', 'createdBy', 'course.teacher'],
+      relations: ['course', 'createdBy', 'course.teacher', 'assignmentMaterials'],
     });
 
     if (!assignment) {
@@ -351,6 +407,17 @@ export class AssignmentsService {
       throw new ForbiddenException('Invalid role');
     }
 
+    // Map materials to DTO
+    const materials: AssignmentMaterialDto[] = assignment.assignmentMaterials?.map(
+      (material) => ({
+        id: material.id,
+        fileUrl: material.fileUrl,
+        fileName: material.fileName,
+        fileSize: material.fileSize,
+        fileType: material.fileType,
+      }),
+    ) || [];
+
     // Transform to DTO
     const response: AssignmentDetailResponseDto = {
       id: assignment.id,
@@ -361,8 +428,8 @@ export class AssignmentsService {
       format: assignment.format,
       totalMarks: assignment.totalMarks,
       dueDate: assignment.dueDate,
-      fileUrl: assignment.fileUrl,
       createdAt: assignment.createdAt,
+      materials: materials,
       course: {
         id: assignment.course.id,
         courseName: assignment.course.courseName,
@@ -387,15 +454,20 @@ export class AssignmentsService {
     assignmentId: number,
     userId: number,
     roleId: number,
-    file: Express.Multer.File,
+    files: Express.Multer.File[],
   ): Promise<SubmissionResponseDto> {
     // Only students can upload submissions
     if (roleId !== 3) {
       throw new ForbiddenException('Only students can submit assignments');
     }
 
-    // Validate file
-    validateSubmissionFile(file);
+    // Validate files
+    if (!files || files.length === 0) {
+      throw new BadRequestException('At least one file is required');
+    }
+
+    // Validate all files
+    validateFiles(files);
 
     // Fetch assignment with course relation
     const assignment = await this.assignmentRepository.findOne({
@@ -436,14 +508,20 @@ export class AssignmentsService {
       );
     }
 
-    // Upload file to Cloudinary
-    let fileUrl: string;
-    try {
-      const uploadResult = await uploadDocumentToCloudinary(file);
-      fileUrl = uploadResult.secure_url;
-    } catch (error) {
-      throw new BadRequestException('Failed to upload file. Please try again.');
-    }
+    // Upload all files to Cloudinary
+    const fileUploadPromises = files.map(async (file) => {
+      try {
+        const uploadResult = await uploadDocumentToCloudinary(file);
+        return uploadResult.secure_url;
+      } catch (error) {
+        throw new BadRequestException(`Failed to upload file: ${file.originalname}`);
+      }
+    });
+
+    const fileUrls = await Promise.all(fileUploadPromises);
+
+    // Always store file URLs as JSON array string for consistency
+    const submissionFileValue = JSON.stringify(fileUrls);
 
     // Determine submission status (check if late)
     const now = new Date();
@@ -457,7 +535,7 @@ export class AssignmentsService {
       : AssignmentSubmissionStatus.SUBMITTED;
 
     // Update submission record
-    submission.submissionFile = fileUrl;
+    submission.submissionFile = submissionFileValue;
     submission.submittedAt = now;
     submission.status = submissionStatus;
 
@@ -465,10 +543,13 @@ export class AssignmentsService {
       submission,
     );
 
+    // Parse submission files using helper function
+    const submissionFiles = parseSubmissionFiles(updatedSubmission.submissionFile);
+
     // Return response DTO
     const response: SubmissionResponseDto = {
       id: updatedSubmission.id,
-      submissionFile: updatedSubmission.submissionFile,
+      submissionFiles: submissionFiles,
       status: updatedSubmission.status,
       submittedAt: updatedSubmission.submittedAt,
       marksObtained: updatedSubmission.marksObtained,
@@ -482,22 +563,27 @@ export class AssignmentsService {
 
   async previewAssignmentFile(
     assignmentId: number,
+    materialId: number,
     userId: number,
     roleId: number,
   ): Promise<{ fileUrl: string; filename: string }> {
     // Fetch assignment with all relations
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
-      relations: ['course', 'createdBy', 'course.teacher'],
+      relations: ['course', 'createdBy', 'course.teacher', 'assignmentMaterials'],
     });
 
     if (!assignment) {
       throw new NotFoundException('Assignment not found');
     }
 
-    // Check if assignment has a file
-    if (!assignment.fileUrl) {
-      throw new NotFoundException('Assignment file not found');
+    // Find the specific material
+    const material = assignment.assignmentMaterials?.find(
+      (m) => m.id === materialId,
+    );
+
+    if (!material) {
+      throw new NotFoundException('Assignment material not found');
     }
 
     // Role-based access control (same logic as getAssignmentById)
@@ -530,22 +616,11 @@ export class AssignmentsService {
       throw new ForbiddenException('Invalid role');
     }
 
-    // Extract filename from URL or use a default
-    let filename = 'assignment.pdf';
-    try {
-      const url = new URL(assignment.fileUrl);
-      const pathParts = url.pathname.split('/');
-      const lastPart = pathParts[pathParts.length - 1];
-      if (lastPart && lastPart.includes('.')) {
-        filename = lastPart;
-      }
-    } catch (error) {
-      // If URL parsing fails, use default filename
-      filename = 'assignment.pdf';
-    }
+    // Extract filename from material or use a default
+    const filename = material.fileName || 'assignment.pdf';
 
     return {
-      fileUrl: assignment.fileUrl,
+      fileUrl: material.fileUrl,
       filename: filename,
     };
   }
@@ -604,13 +679,15 @@ export class AssignmentsService {
     const studentSubmissions: StudentSubmissionDto[] = enrollments.map(
       (enrollment) => {
         const submission = submissionMap.get(enrollment.student.id);
+        const submissionFiles = parseSubmissionFiles(submission?.submissionFile || null);
+        
         return {
           studentId: enrollment.student.id,
           firstName: enrollment.student.firstName,
           lastName: enrollment.student.lastName,
           email: enrollment.student.email,
           submittedAt: submission?.submittedAt || null,
-          submissionFile: submission?.submissionFile || null,
+          submissionFiles: submissionFiles,
           status: submission?.status || AssignmentSubmissionStatus.MISSING,
         };
       },
@@ -730,10 +807,13 @@ export class AssignmentsService {
       submission,
     );
 
+    // Parse submission files
+    const submissionFiles = parseSubmissionFiles(updatedSubmission.submissionFile);
+
     // Return response DTO
     const response: SubmissionResponseDto = {
       id: updatedSubmission.id,
-      submissionFile: updatedSubmission.submissionFile,
+      submissionFiles: submissionFiles,
       status: updatedSubmission.status,
       submittedAt: updatedSubmission.submittedAt,
       marksObtained: updatedSubmission.marksObtained,

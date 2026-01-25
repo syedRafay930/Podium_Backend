@@ -11,7 +11,7 @@ import {
   HttpStatus,
   Param,
   UseInterceptors,
-  UploadedFile,
+  UploadedFiles,
   Res,
   HttpException,
   ParseIntPipe,
@@ -28,7 +28,7 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { AssignmentsService } from './assignments.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -121,19 +121,19 @@ export class AssignmentsController {
 
   @UseGuards(JwtBlacklistGuard)
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FilesInterceptor('files', 10))
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create new assignment',
     description:
-      'Create a new assignment. Admins can create assignments for any course. Teachers can only create assignments for courses they are teaching. After creation, assignment_submission records are automatically created for all enrolled students with "missing" status. You can either upload a file directly or provide a fileUrl. If both are provided, the uploaded file takes precedence.',
+      'Create a new assignment. Admins can create assignments for any course. Teachers can only create assignments for courses they are teaching. After creation, assignment_submission records are automatically created for all enrolled students with "missing" status. You can upload multiple files (up to 10) as assignment materials. Files will be uploaded to Cloudinary.',
   })
   @ApiBody({
     type: CreateAssignmentDto,
     description:
-      'Assignment information. The file field should be sent as multipart/form-data with field name "file". If a file is uploaded, it will be uploaded to Cloudinary. Alternatively, you can provide a fileUrl in the DTO.',
+      'Assignment information. Files should be sent as multipart/form-data with field name "files". Multiple files can be uploaded (up to 10). Allowed file types: PDF, ZIP, Word (.doc, .docx), Excel (.xls, .xlsx), Text (.txt), PowerPoint (.ppt, .pptx). Maximum file size: 50MB per file.',
   })
   @ApiResponse({
     status: 201,
@@ -142,7 +142,7 @@ export class AssignmentsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - Invalid input data',
+    description: 'Bad request - Invalid input data or file validation failed',
   })
   @ApiResponse({
     status: 401,
@@ -164,26 +164,32 @@ export class AssignmentsController {
   async createAssignment(
     @Request() req: any,
     @Body() createDto: CreateAssignmentDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
     const userId = req.user.id;
     const roleId = req.user.role_id;
 
-    return this.assignmentsService.createAssignment(createDto, userId, roleId, file);
+    return this.assignmentsService.createAssignment(createDto, userId, roleId, files);
   }
 
   @UseGuards(JwtBlacklistGuard)
-  @Get(':id/preview')
+  @Get(':id/preview/:materialId')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
-    summary: 'Preview assignment file',
+    summary: 'Preview assignment material file',
     description:
-      'Preview the assignment file (PDF) directly in the browser. The file is streamed from Cloudinary with proper headers for inline viewing. Access is role-based: Students can only preview files for assignments in courses they are enrolled in, Teachers can preview files for assignments they created or for courses they teach, Admins can preview all assignment files.',
+      'Preview an assignment material file (PDF) directly in the browser. The file is streamed from Cloudinary with proper headers for inline viewing. Access is role-based: Students can only preview files for assignments in courses they are enrolled in, Teachers can preview files for assignments they created or for courses they teach, Admins can preview all assignment files.',
   })
   @ApiParam({
     name: 'id',
     type: Number,
     description: 'Unique identifier of the assignment',
+    example: 1,
+  })
+  @ApiParam({
+    name: 'materialId',
+    type: Number,
+    description: 'Unique identifier of the assignment material',
     example: 1,
   })
   @ApiResponse({
@@ -208,7 +214,7 @@ export class AssignmentsController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Not found - Assignment not found or assignment file not found',
+    description: 'Not found - Assignment not found or assignment material not found',
   })
   @ApiResponse({
     status: 500,
@@ -217,6 +223,7 @@ export class AssignmentsController {
   async previewAssignmentFile(
     @Request() req: any,
     @Param('id') assignmentId: number,
+    @Param('materialId', ParseIntPipe) materialId: number,
     @Res() res: Response,
   ) {
     const userId = req.user.id;
@@ -227,6 +234,7 @@ export class AssignmentsController {
       const { fileUrl, filename } =
         await this.assignmentsService.previewAssignmentFile(
           assignmentId,
+          materialId,
           userId,
           roleId,
         );
@@ -408,14 +416,14 @@ export class AssignmentsController {
 
   @UseGuards(JwtBlacklistGuard)
   @Post(':id/submit')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FilesInterceptor('files', 10))
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Upload assignment submission',
     description:
-      'Upload a file for assignment submission. Only students enrolled in the course can submit. Allowed file types: PDF, ZIP, Word (.doc, .docx), Excel (.xls, .xlsx), Text (.txt), PowerPoint (.ppt, .pptx). Maximum file size: 50MB. The submission status will be automatically set to "submitted" or "late" based on the due date.',
+      'Upload files for assignment submission. Only students enrolled in the course can submit. You can upload multiple files (up to 10). Allowed file types: PDF, ZIP, Word (.doc, .docx), Excel (.xls, .xlsx), Text (.txt), PowerPoint (.ppt, .pptx). Maximum file size: 50MB per file. The submission status will be automatically set to "submitted" or "late" based on the due date.',
   })
   @ApiParam({
     name: 'id',
@@ -426,7 +434,7 @@ export class AssignmentsController {
   @ApiBody({
     type: UploadSubmissionDto,
     description:
-      'Assignment submission file. File field name must be "file". Allowed types: PDF, ZIP, Word, Excel, Text, PowerPoint. Maximum size: 50MB.',
+      'Assignment submission files. File field name must be "files". Multiple files can be uploaded (up to 10). Allowed types: PDF, ZIP, Word, Excel, Text, PowerPoint. Maximum size: 50MB per file.',
   })
   @ApiResponse({
     status: 200,
@@ -436,7 +444,7 @@ export class AssignmentsController {
   @ApiResponse({
     status: 400,
     description:
-      'Bad request - Invalid file type, file too large, or missing file',
+      'Bad request - Invalid file type, file too large, or missing files',
   })
   @ApiResponse({
     status: 401,
@@ -459,7 +467,7 @@ export class AssignmentsController {
   async uploadSubmission(
     @Request() req: any,
     @Param('id') assignmentId: number,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
     const userId = req.user.id;
     const roleId = req.user.role_id;
@@ -468,7 +476,7 @@ export class AssignmentsController {
       assignmentId,
       userId,
       roleId,
-      file,
+      files || [],
     );
   }
 

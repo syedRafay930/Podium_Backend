@@ -143,7 +143,7 @@ export class CourseManagementService {
         const [assignments, lectures, resources] = await Promise.all([
           this.assignmentRepository.find({
             where: { sectionId: section.id },
-            relations: ['createdBy'],
+            relations: ['createdBy', 'assignmentMaterials'],
             order: { createdAt: 'ASC' },
           }),
           this.lectureRepository
@@ -203,7 +203,7 @@ export class CourseManagementService {
         const [assignments, lectures, resources] = await Promise.all([
           this.assignmentRepository.find({
             where: { sectionId: section.id },
-            relations: ['createdBy'],
+            relations: ['createdBy', 'assignmentMaterials'],
             order: { createdAt: 'ASC' },
           }),
           this.lectureRepository
@@ -307,28 +307,39 @@ export class CourseManagementService {
     if (deleteAssignments) {
       const assignments = await this.assignmentRepository.find({
         where: { sectionId },
+        relations: ['assignmentMaterials'],
       });
 
+      // Collect all materials with valid fileUrls for parallel deletion
+      const materialDeletions: Promise<void>[] = [];
       for (const assignment of assignments) {
-        // Delete Cloudinary file if present
-        if (assignment.fileUrl) {
-          try {
-            const publicId = this.extractPublicIdFromUrl(assignment.fileUrl);
-            if (publicId) {
-              await cloudinary.uploader.destroy(publicId);
+        if (assignment.assignmentMaterials && assignment.assignmentMaterials.length > 0) {
+          for (const material of assignment.assignmentMaterials) {
+            if (material.fileUrl) {
+              const publicId = this.extractPublicIdFromUrl(material.fileUrl);
+              if (publicId) {
+                materialDeletions.push(
+                  cloudinary.uploader.destroy(publicId).catch((error) => {
+                    console.error(
+                      `Failed to delete assignment material Cloudinary file: ${error}`,
+                    );
+                  }),
+                );
+              }
             }
-          } catch (error) {
-            console.error(
-              `Failed to delete assignment Cloudinary file: ${error}`,
-            );
           }
         }
+      }
 
-        // Delete the assignment (submissions will be cascade-deleted)
+      // Delete all Cloudinary files in parallel
+      await Promise.all(materialDeletions);
+
+      // Bulk delete assignments (materials and submissions will be cascade-deleted)
+      if (assignments.length > 0) {
         try {
-          await this.assignmentRepository.remove(assignment);
+          await this.assignmentRepository.delete({ sectionId });
         } catch (error) {
-          console.error(`Failed to delete assignment: ${error}`);
+          console.error(`Failed to delete assignments: ${error}`);
         }
       }
     }
@@ -407,6 +418,14 @@ export class CourseManagementService {
   }
 
   private mapAssignmentToDto(assignment: Assignment) {
+    const materials = assignment.assignmentMaterials?.map((material) => ({
+      id: material.id,
+      fileUrl: material.fileUrl,
+      fileName: material.fileName,
+      fileSize: material.fileSize,
+      fileType: material.fileType,
+    })) || [];
+
     return {
       id: assignment.id,
       title: assignment.title,
@@ -415,9 +434,9 @@ export class CourseManagementService {
       format: assignment.format,
       totalMarks: assignment.totalMarks,
       dueDate: assignment.dueDate,
-      fileUrl: assignment.fileUrl,
       description: assignment.description,
       createdAt: assignment.createdAt,
+      materials: materials.length > 0 ? materials : undefined,
       createdBy: assignment.createdBy
         ? {
             id: assignment.createdBy.id,
