@@ -131,6 +131,13 @@ export class CourseController {
     description: 'Search courses by name (case-insensitive partial match)', 
     example: 'TypeScript' 
   })
+  @ApiQuery({ 
+    name: 'teacherId', 
+    required: false, 
+    type: String, 
+    description: 'Filter courses by teacher ID', 
+    example: '1' 
+  })
   @ApiResponse({
     status: 200,
     description: 'Paginated list of courses retrieved successfully',
@@ -150,8 +157,51 @@ export class CourseController {
     @Query('limit') limit = 10,
     @Query('category') category?: string,
     @Query('search') search?: string,
+    @Query('teacherId') teacherId?: string,
   ) {
-    return this.courseService.getAllCourses(+page, +limit, category, search);
+    return this.courseService.getAllCourses(+page, +limit, category, search, teacherId);
+  }
+
+  @UseGuards(JwtBlacklistGuard)
+  @Get('assign-courses')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ 
+    summary: 'Get my courses for teachers', 
+    description: 'Get paginated list of courses created by the authenticated user. Supports pagination with page and limit parameters.' 
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number for pagination (starts from 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of items per page',
+    example: 10,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of user\'s courses retrieved successfully',
+    type: PaginatedCoursesResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async getMyCoursesforTeachers(
+    @Request() req: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return this.courseService.getAllCourses(+page, +limit, undefined, undefined, req.user.id.toString());
   }
 
   @UseGuards(JwtBlacklistGuard)

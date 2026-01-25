@@ -91,7 +91,7 @@ export class CourseService {
       // Send notification to teacher about the new course assignment
       await this.assignTeacherToCourse(savedCourse.id, teacher.id, adminId);
     }
-    return savedCourse
+    return savedCourse;
   }
 
   async getAllCourses(
@@ -99,6 +99,7 @@ export class CourseService {
     limit: number,
     category?: string,
     search?: string,
+    teacherId?: string,
   ) {
     const query = this.courseRepository
       .createQueryBuilder('course')
@@ -123,6 +124,10 @@ export class CourseService {
       query.andWhere('course.courseName ILIKE :search', {
         search: `%${search}%`,
       });
+    }
+
+    if (teacherId) {
+      query.andWhere('teacher.id = :teacherId', { teacherId });
     }
 
     query.skip((page - 1) * limit).take(limit);
@@ -389,7 +394,7 @@ export class CourseService {
       // Delete token from Redis
       await this.redisService.deleteValue(`teacher-invite:${invitationToken}`);
 
-      return { 
+      return {
         message: 'Course assignment accepted successfully!',
         courseName: course.courseName,
       };
@@ -402,7 +407,7 @@ export class CourseService {
       // Delete token from Redis
       await this.redisService.deleteValue(`teacher-invite:${invitationToken}`);
 
-      return { 
+      return {
         message: 'Course assignment rejected',
         courseName: course.courseName,
       };
