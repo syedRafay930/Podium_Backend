@@ -11,6 +11,23 @@ export class UserBasicDto {
   lastName: string;
 }
 
+export class AssignmentMaterialDto {
+  @ApiProperty({ description: 'Material ID', example: 1 })
+  id: number;
+
+  @ApiProperty({ description: 'File URL', example: 'https://example.com/assignment.pdf' })
+  fileUrl: string;
+
+  @ApiProperty({ description: 'File name', example: 'assignment.pdf', required: false })
+  fileName: string | null;
+
+  @ApiProperty({ description: 'File size in bytes', example: 1024000, required: false })
+  fileSize: number | null;
+
+  @ApiProperty({ description: 'File MIME type', example: 'application/pdf', required: false })
+  fileType: string | null;
+}
+
 export class AssignmentDto {
   @ApiProperty({ description: 'Assignment ID', example: 1 })
   id: number;
@@ -33,14 +50,27 @@ export class AssignmentDto {
   @ApiProperty({ description: 'Due date', example: '2024-12-31T23:59:59Z', required: false })
   dueDate: Date | null;
 
-  @ApiProperty({ description: 'File URL', example: 'https://example.com/file.pdf', required: false })
-  fileUrl: string | null;
-
   @ApiProperty({ description: 'Assignment description', example: 'This is a test', required: false })
   description: string | null;
 
   @ApiProperty({ description: 'Created at', example: '2024-01-01T00:00:00Z' })
   createdAt: Date | null;
+
+  @ApiProperty({
+    description: 'Assignment materials (files)',
+    type: [AssignmentMaterialDto],
+    required: false,
+    example: [
+      {
+        id: 1,
+        fileUrl: 'https://example.com/assignment.pdf',
+        fileName: 'assignment.pdf',
+        fileSize: 1024000,
+        fileType: 'application/pdf',
+      },
+    ],
+  })
+  materials?: AssignmentMaterialDto[];
 
   @ApiProperty({ description: 'Creator information', type: UserBasicDto, required: false })
   createdBy?: UserBasicDto;

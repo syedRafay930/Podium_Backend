@@ -23,12 +23,12 @@ export class StudentSubmissionDto {
   submittedAt: Date | null;
 
   @ApiProperty({
-    description: 'URL of the submitted file',
-    example: 'https://res.cloudinary.com/example/raw/upload/v1234567890/submission.pdf',
+    description: 'Array of submitted file URLs',
+    example: ['https://res.cloudinary.com/example/raw/upload/v1234567890/submission.pdf'],
+    type: [String],
     required: false,
-    nullable: true,
   })
-  submissionFile: string | null;
+  submissionFiles: string[];
 
   @ApiProperty({
     description: 'Submission status',

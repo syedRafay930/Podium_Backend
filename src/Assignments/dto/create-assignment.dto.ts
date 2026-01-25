@@ -71,17 +71,6 @@ export class CreateAssignmentDto {
   dueDate?: string;
 
   @ApiProperty({
-    description: 'File URL for assignment materials',
-    example: 'https://example.com/assignment.pdf',
-    type: String,
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  fileUrl?: string;
-
-  @ApiProperty({
     description: 'Course ID for the assignment',
     example: 1,
     type: Number,

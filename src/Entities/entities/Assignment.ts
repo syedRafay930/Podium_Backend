@@ -10,6 +10,7 @@ import {
 import { Courses } from "./Courses";
 import { Users } from "./Users";
 import { Sections } from "./Sections";
+import { AssignmentMaterial } from "./AssignmentMaterial";
 import { AssignmentSubmission } from "./AssignmentSubmission";
 
 @Index("assignment_pkey", ["id"], { unique: true })
@@ -41,13 +42,6 @@ export class Assignment {
   @Column("timestamp without time zone", { name: "due_date", nullable: true })
   dueDate: Date | null;
 
-  @Column("character varying", {
-    name: "file_url",
-    nullable: true,
-    length: 500,
-  })
-  fileUrl: string | null;
-
   @Column("timestamp without time zone", {
     name: "created_at",
     nullable: true,
@@ -76,6 +70,12 @@ export class Assignment {
   })
   @JoinColumn([{ name: "section_id", referencedColumnName: "id" }])
   section: Sections;
+
+  @OneToMany(
+    () => AssignmentMaterial,
+    (assignmentMaterial) => assignmentMaterial.assignment
+  )
+  assignmentMaterials: AssignmentMaterial[];
 
   @OneToMany(
     () => AssignmentSubmission,
