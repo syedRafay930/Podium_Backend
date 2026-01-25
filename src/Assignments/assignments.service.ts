@@ -196,6 +196,7 @@ export class AssignmentsService {
     createDto: CreateAssignmentDto,
     userId: number,
     roleId: number,
+    file?: Express.Multer.File,
   ) {
     // Check if user is admin or teacher
     if (roleId !== 1 && roleId !== 2) {
@@ -221,6 +222,19 @@ export class AssignmentsService {
       }
     }
 
+    // Handle file upload - if file is provided, upload to Cloudinary; otherwise use fileUrl from DTO
+    let fileUrl: string | null = null;
+    if (file) {
+      try {
+        const uploadResult = await uploadDocumentToCloudinary(file);
+        fileUrl = uploadResult.secure_url;
+      } catch (error) {
+        throw new BadRequestException('Failed to upload file. Please try again.');
+      }
+    } else if (createDto.fileUrl) {
+      fileUrl = createDto.fileUrl;
+    }
+
     // Create assignment
     const assignment = this.assignmentRepository.create({
       title: createDto.title,
@@ -229,7 +243,7 @@ export class AssignmentsService {
       format: createDto.format || null,
       totalMarks: createDto.totalMarks || null,
       dueDate: createDto.dueDate ? new Date(createDto.dueDate) : null,
-      fileUrl: createDto.fileUrl || null,
+      fileUrl: fileUrl,
       course: course,
       createdBy: userId as any,
       createdAt: new Date(),
@@ -243,28 +257,19 @@ export class AssignmentsService {
       relations: ['student'],
     });
 
-    // Create assignment_submission records for all enrolled students
-    // Note: gradedBy is omitted as it will be set when assignment is graded
-    // The database column is nullable but entity doesn't reflect it
-    const submissionRecords: AssignmentSubmission[] = [];
-    
-    for (const enrollment of enrollments) {
-      // Using DeepPartial to allow omitting gradedBy (nullable in DB but not in entity)
-      const partial: DeepPartial<AssignmentSubmission> = {
-        assignment: savedAssignment,
-        student: enrollment.student,
+    // Create assignment_submission records for all enrolled students using bulk insert
+    if (enrollments.length > 0) {
+      const submissionData = enrollments.map(enrollment => ({
+        assignment_id: savedAssignment.id,
+        student_id: enrollment.student.id,
         status: AssignmentSubmissionStatus.MISSING,
-        submittedAt: null,
-        marksObtained: null,
-        submissionFile: null,
+        submitted_at: null,
+        marks_obtained: null,
+        submission_file: null,
         comments: null,
-      };
-      const submission = this.assignmentSubmissionRepository.create(partial);
-      submissionRecords.push(submission);
-    }
+      }));
 
-    if (submissionRecords.length > 0) {
-      await this.assignmentSubmissionRepository.save(submissionRecords);
+      await this.assignmentSubmissionRepository.insert(submissionData);
     }
 
     // Return assignment with relations

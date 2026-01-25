@@ -121,12 +121,19 @@ export class AssignmentsController {
 
   @UseGuards(JwtBlacklistGuard)
   @Post()
+  @UseInterceptors(FileInterceptor('file'))
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create new assignment',
     description:
-      'Create a new assignment. Admins can create assignments for any course. Teachers can only create assignments for courses they are teaching. After creation, assignment_submission records are automatically created for all enrolled students with "missing" status.',
+      'Create a new assignment. Admins can create assignments for any course. Teachers can only create assignments for courses they are teaching. After creation, assignment_submission records are automatically created for all enrolled students with "missing" status. You can either upload a file directly or provide a fileUrl. If both are provided, the uploaded file takes precedence.',
+  })
+  @ApiBody({
+    type: CreateAssignmentDto,
+    description:
+      'Assignment information. The file field should be sent as multipart/form-data with field name "file". If a file is uploaded, it will be uploaded to Cloudinary. Alternatively, you can provide a fileUrl in the DTO.',
   })
   @ApiResponse({
     status: 201,
@@ -154,11 +161,15 @@ export class AssignmentsController {
     status: 500,
     description: 'Internal server error',
   })
-  async createAssignment(@Request() req: any, @Body() createDto: CreateAssignmentDto) {
+  async createAssignment(
+    @Request() req: any,
+    @Body() createDto: CreateAssignmentDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
     const userId = req.user.id;
     const roleId = req.user.role_id;
 
-    return this.assignmentsService.createAssignment(createDto, userId, roleId);
+    return this.assignmentsService.createAssignment(createDto, userId, roleId, file);
   }
 
   @UseGuards(JwtBlacklistGuard)
