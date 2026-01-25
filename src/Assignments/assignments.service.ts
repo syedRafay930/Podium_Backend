@@ -73,14 +73,11 @@ export class AssignmentsService {
         'materials.fileType',
       ]);
 
-    // Role-based filtering
     if (roleId === 3) {
-      // Student: Only see assignments for courses they're enrolled in
       query
         .innerJoin(Enrollment, 'enrollment', 'enrollment.courseId = assignment.course.id')
         .where('enrollment.studentId = :userId', { userId });
 
-      // If status filter is provided, filter by student's own submission status
       if (status) {
         query
           .innerJoin(
@@ -92,14 +89,12 @@ export class AssignmentsService {
           .andWhere('submission.status = :status', { status });
       }
     } else if (roleId === 2) {
-      // Teacher: See assignments they created OR assignments for courses they teach
       query
         .leftJoin('course.teacher', 'teacher')
         .where('(assignment.createdBy.id = :userId OR teacher.id = :userId)', {
           userId,
         });
 
-      // If status filter is provided, filter by any assignment_submission status
       if (status) {
         query
           .innerJoin(
@@ -110,7 +105,6 @@ export class AssignmentsService {
           .andWhere('submission.status = :status', { status });
       }
     } else if (roleId === 1) {
-      // Admin: See all assignments
       if (status) {
         query
           .innerJoin(
@@ -124,18 +118,15 @@ export class AssignmentsService {
       throw new ForbiddenException('Invalid role');
     }
 
-    // Filter by course if provided
     if (courseId) {
       query.andWhere('course.id = :courseId', { courseId });
     }
 
-    // Pagination
     query.skip((page - 1) * limit).take(limit);
     query.orderBy('assignment.createdAt', 'DESC');
 
     const assignments = await query.getMany();
 
-    // Get total count for pagination
     const countQuery = this.assignmentRepository
       .createQueryBuilder('assignment')
       .leftJoin('assignment.course', 'course');
@@ -189,38 +180,37 @@ export class AssignmentsService {
 
     const total = await countQuery.getCount();
 
-    // Map assignments to DTOs with materials
     const assignmentDtos: AssignmentResponseDto[] = assignments.map((assignment) => {
       const materials: AssignmentMaterialBasicDto[] = assignment.assignmentMaterials?.map(
         (material) => ({
-          id: material.id,
-          fileUrl: material.fileUrl,
-          fileName: material.fileName,
-          fileSize: material.fileSize,
-          fileType: material.fileType,
+            id: material.id,
+            fileUrl: material.fileUrl,
+            fileName: material.fileName,
+            fileSize: material.fileSize,
+            fileType: material.fileType,
         }),
       ) || [];
 
-      return {
-        id: assignment.id,
-        title: assignment.title,
-        objective: assignment.objective,
-        deliverable: assignment.deliverable,
-        format: assignment.format,
-        totalMarks: assignment.totalMarks,
-        dueDate: assignment.dueDate,
-        createdAt: assignment.createdAt,
-        materials: materials,
-        course: {
-          id: assignment.course.id,
-          courseName: assignment.course.courseName,
-        },
-        createdBy: {
-          id: assignment.createdBy.id,
-          firstName: assignment.createdBy.firstName,
-          lastName: assignment.createdBy.lastName,
-        },
-      };
+        return {
+          id: assignment.id,
+          title: assignment.title,
+          objective: assignment.objective,
+          deliverable: assignment.deliverable,
+          format: assignment.format,
+          totalMarks: assignment.totalMarks,
+          dueDate: assignment.dueDate,
+          createdAt: assignment.createdAt,
+          materials: materials,
+          course: {
+            id: assignment.course.id,
+            courseName: assignment.course.courseName,
+          },
+          createdBy: {
+            id: assignment.createdBy.id,
+            firstName: assignment.createdBy.firstName,
+            lastName: assignment.createdBy.lastName,
+          },
+        };
     });
 
     return {
@@ -241,12 +231,10 @@ export class AssignmentsService {
     roleId: number,
     files?: Express.Multer.File[],
   ) {
-    // Check if user is admin or teacher
     if (roleId !== 1 && roleId !== 2) {
       throw new ForbiddenException('Only admins and teachers can create assignments');
     }
 
-    // Verify course exists
     const course = await this.courseRepository.findOne({
       where: { id: createDto.courseId },
       relations: ['teacher'],
@@ -256,7 +244,6 @@ export class AssignmentsService {
       throw new NotFoundException('Course not found');
     }
 
-    // If user is teacher, verify they are teaching this course
     if (roleId === 2) {
       if (!course.teacher || course.teacher.id !== userId) {
         throw new ForbiddenException(
@@ -265,12 +252,10 @@ export class AssignmentsService {
       }
     }
 
-    // Validate files if provided
     if (files && files.length > 0) {
       validateFiles(files);
     }
 
-    // Create assignment
     const assignment = this.assignmentRepository.create({
       title: createDto.title,
       objective: createDto.objective || null,
@@ -285,13 +270,10 @@ export class AssignmentsService {
 
     const savedAssignment = await this.assignmentRepository.save(assignment);
 
-    // Upload files and create AssignmentMaterial records
     if (files && files.length > 0) {
       const materialPromises = files.map(async (file) => {
-        // Upload file to Cloudinary
         const uploadResult = await uploadDocumentToCloudinary(file);
-        
-        // Create AssignmentMaterial record
+
         const material = this.assignmentMaterialRepository.create({
           assignmentId: savedAssignment.id,
           fileUrl: uploadResult.secure_url,
@@ -307,13 +289,11 @@ export class AssignmentsService {
       await Promise.all(materialPromises);
     }
 
-    // Get all enrolled students for this course
     const enrollments = await this.enrollmentRepository.find({
       where: { courseId: createDto.courseId },
       relations: ['student'],
     });
 
-    // Create assignment_submission records for all enrolled students using bulk insert
     if (enrollments.length > 0) {
       const submissionData = enrollments.map(enrollment => ({
         assignment_id: savedAssignment.id,
@@ -328,7 +308,6 @@ export class AssignmentsService {
       await this.assignmentSubmissionRepository.insert(submissionData);
     }
 
-    // Return assignment with relations
     const assignmentWithRelations = await this.assignmentRepository.findOne({
       where: { id: savedAssignment.id },
       relations: ['course', 'createdBy', 'assignmentMaterials'],
@@ -367,7 +346,6 @@ export class AssignmentsService {
     userId: number,
     roleId: number,
   ): Promise<AssignmentDetailResponseDto> {
-    // Fetch assignment with all relations
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
       relations: ['course', 'createdBy', 'course.teacher', 'assignmentMaterials'],
@@ -377,9 +355,7 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    // Role-based access control
     if (roleId === 3) {
-      // Student: Only if enrolled in the course
       const enrollment = await this.enrollmentRepository.findOne({
         where: {
           studentId: userId,
@@ -393,7 +369,6 @@ export class AssignmentsService {
         );
       }
     } else if (roleId === 2) {
-      // Teacher: If they created it OR teach the course
       const isCreator = assignment.createdBy.id === userId;
       const isTeacher = assignment.course.teacher?.id === userId;
 
@@ -403,11 +378,9 @@ export class AssignmentsService {
         );
       }
     } else if (roleId !== 1) {
-      // Admin (roleId === 1) has full access, but any other role is invalid
       throw new ForbiddenException('Invalid role');
     }
 
-    // Map materials to DTO
     const materials: AssignmentMaterialDto[] = assignment.assignmentMaterials?.map(
       (material) => ({
         id: material.id,
@@ -418,7 +391,6 @@ export class AssignmentsService {
       }),
     ) || [];
 
-    // Transform to DTO
     const response: AssignmentDetailResponseDto = {
       id: assignment.id,
       title: assignment.title,
@@ -456,20 +428,16 @@ export class AssignmentsService {
     roleId: number,
     files: Express.Multer.File[],
   ): Promise<SubmissionResponseDto> {
-    // Only students can upload submissions
     if (roleId !== 3) {
       throw new ForbiddenException('Only students can submit assignments');
     }
 
-    // Validate files
     if (!files || files.length === 0) {
       throw new BadRequestException('At least one file is required');
     }
 
-    // Validate all files
     validateFiles(files);
 
-    // Fetch assignment with course relation
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
       relations: ['course'],
@@ -479,7 +447,6 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    // Verify student is enrolled in the course
     const enrollment = await this.enrollmentRepository.findOne({
       where: {
         studentId: userId,
@@ -493,7 +460,6 @@ export class AssignmentsService {
       );
     }
 
-    // Find or verify submission record exists
     let submission = await this.assignmentSubmissionRepository.findOne({
       where: {
         assignment: { id: assignmentId },
@@ -508,7 +474,6 @@ export class AssignmentsService {
       );
     }
 
-    // Upload all files to Cloudinary
     const fileUploadPromises = files.map(async (file) => {
       try {
         const uploadResult = await uploadDocumentToCloudinary(file);
@@ -520,10 +485,8 @@ export class AssignmentsService {
 
     const fileUrls = await Promise.all(fileUploadPromises);
 
-    // Always store file URLs as JSON array string for consistency
     const submissionFileValue = JSON.stringify(fileUrls);
 
-    // Determine submission status (check if late)
     const now = new Date();
     const isLate =
       assignment.dueDate && new Date(assignment.dueDate) < now
@@ -534,7 +497,6 @@ export class AssignmentsService {
       ? AssignmentSubmissionStatus.LATE
       : AssignmentSubmissionStatus.SUBMITTED;
 
-    // Update submission record
     submission.submissionFile = submissionFileValue;
     submission.submittedAt = now;
     submission.status = submissionStatus;
@@ -543,10 +505,8 @@ export class AssignmentsService {
       submission,
     );
 
-    // Parse submission files using helper function
     const submissionFiles = parseSubmissionFiles(updatedSubmission.submissionFile);
 
-    // Return response DTO
     const response: SubmissionResponseDto = {
       id: updatedSubmission.id,
       submissionFiles: submissionFiles,
@@ -561,70 +521,6 @@ export class AssignmentsService {
     return response;
   }
 
-  async previewAssignmentFile(
-    assignmentId: number,
-    materialId: number,
-    userId: number,
-    roleId: number,
-  ): Promise<{ fileUrl: string; filename: string }> {
-    // Fetch assignment with all relations
-    const assignment = await this.assignmentRepository.findOne({
-      where: { id: assignmentId },
-      relations: ['course', 'createdBy', 'course.teacher', 'assignmentMaterials'],
-    });
-
-    if (!assignment) {
-      throw new NotFoundException('Assignment not found');
-    }
-
-    // Find the specific material
-    const material = assignment.assignmentMaterials?.find(
-      (m) => m.id === materialId,
-    );
-
-    if (!material) {
-      throw new NotFoundException('Assignment material not found');
-    }
-
-    // Role-based access control (same logic as getAssignmentById)
-    if (roleId === 3) {
-      // Student: Only if enrolled in the course
-      const enrollment = await this.enrollmentRepository.findOne({
-        where: {
-          studentId: userId,
-          courseId: assignment.course.id,
-        },
-      });
-
-      if (!enrollment) {
-        throw new ForbiddenException(
-          'You do not have permission to view this assignment file',
-        );
-      }
-    } else if (roleId === 2) {
-      // Teacher: If they created it OR teach the course
-      const isCreator = assignment.createdBy.id === userId;
-      const isTeacher = assignment.course.teacher?.id === userId;
-
-      if (!isCreator && !isTeacher) {
-        throw new ForbiddenException(
-          'You do not have permission to view this assignment file',
-        );
-      }
-    } else if (roleId !== 1) {
-      // Admin (roleId === 1) has full access, but any other role is invalid
-      throw new ForbiddenException('Invalid role');
-    }
-
-    // Extract filename from material or use a default
-    const filename = material.fileName || 'assignment.pdf';
-
-    return {
-      fileUrl: material.fileUrl,
-      filename: filename,
-    };
-  }
-
   async getAssignmentSubmissions(
     assignmentId: number,
     userId: number,
@@ -632,12 +528,10 @@ export class AssignmentsService {
     page: number,
     limit: number,
   ): Promise<PaginatedSubmissionsResponseDto> {
-    // Only teachers can access this endpoint
     if (roleId !== 2) {
       throw new ForbiddenException('Only teachers can view assignment submissions');
     }
 
-    // Fetch assignment with course and teacher relations
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
       relations: ['course', 'createdBy', 'course.teacher'],
@@ -647,7 +541,6 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    // Verify teacher permission: created assignment OR teaches the course
     const isCreator = assignment.createdBy.id === userId;
     const isTeacher = assignment.course.teacher?.id === userId;
 
@@ -657,30 +550,26 @@ export class AssignmentsService {
       );
     }
 
-    // Get all enrollments for the course with student relations
     const enrollments = await this.enrollmentRepository.find({
       where: { courseId: assignment.course.id },
       relations: ['student'],
     });
 
-    // Get all submissions for this assignment
     const submissions = await this.assignmentSubmissionRepository.find({
       where: { assignment: { id: assignmentId } },
       relations: ['student'],
     });
 
-    // Create a map of studentId -> submission for quick lookup
     const submissionMap = new Map<number, AssignmentSubmission>();
     submissions.forEach((submission) => {
       submissionMap.set(submission.student.id, submission);
     });
 
-    // Combine enrollments with submissions
     const studentSubmissions: StudentSubmissionDto[] = enrollments.map(
       (enrollment) => {
         const submission = submissionMap.get(enrollment.student.id);
         const submissionFiles = parseSubmissionFiles(submission?.submissionFile || null);
-        
+
         return {
           studentId: enrollment.student.id,
           firstName: enrollment.student.firstName,
@@ -693,14 +582,12 @@ export class AssignmentsService {
       },
     );
 
-    // Sort by student name (lastName, then firstName)
     studentSubmissions.sort((a, b) => {
       const lastNameCompare = a.lastName.localeCompare(b.lastName);
       if (lastNameCompare !== 0) return lastNameCompare;
       return a.firstName.localeCompare(b.firstName);
     });
 
-    // Apply pagination
     const totalItems = studentSubmissions.length;
     const startIndex = (page - 1) * limit;
     const endIndex = startIndex + limit;
@@ -725,12 +612,10 @@ export class AssignmentsService {
     userId: number,
     roleId: number,
   ): Promise<SubmissionResponseDto> {
-    // Only teachers can grade submissions
     if (roleId !== 2) {
       throw new ForbiddenException('Only teachers can grade assignment submissions');
     }
 
-    // Fetch assignment with course and teacher relations
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
       relations: ['course', 'createdBy', 'course.teacher'],
@@ -740,7 +625,6 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    // Verify teacher permission: created assignment OR teaches the course
     const isCreator = assignment.createdBy.id === userId;
     const isTeacher = assignment.course.teacher?.id === userId;
 
@@ -750,7 +634,6 @@ export class AssignmentsService {
       );
     }
 
-    // Find submission record
     const submission = await this.assignmentSubmissionRepository.findOne({
       where: {
         assignment: { id: assignmentId },
@@ -763,13 +646,11 @@ export class AssignmentsService {
       throw new NotFoundException('Submission not found');
     }
 
-    // Validate marks if provided
     if (gradeDto.marksObtained !== undefined && gradeDto.marksObtained !== null) {
       if (gradeDto.marksObtained < 0) {
         throw new BadRequestException('Marks obtained cannot be negative');
       }
 
-      // Validate against totalMarks if it exists
       if (assignment.totalMarks !== null && assignment.totalMarks !== undefined) {
         if (gradeDto.marksObtained > assignment.totalMarks) {
           throw new BadRequestException(
@@ -779,7 +660,6 @@ export class AssignmentsService {
       }
     }
 
-    // Get teacher user entity for gradedBy
     const teacher = await this.usersRepository.findOne({
       where: { id: userId },
     });
@@ -788,10 +668,8 @@ export class AssignmentsService {
       throw new NotFoundException('Teacher not found');
     }
 
-    // Update submission fields
     if (gradeDto.marksObtained !== undefined) {
       submission.marksObtained = gradeDto.marksObtained;
-      // Auto-set status to GRADED when marks are provided
       submission.status = AssignmentSubmissionStatus.GRADED;
     }
 
@@ -799,18 +677,14 @@ export class AssignmentsService {
       submission.comments = gradeDto.comments;
     }
 
-    // Set gradedBy to the current teacher
     submission.gradedBy = teacher;
 
-    // Save updated submission
     const updatedSubmission = await this.assignmentSubmissionRepository.save(
       submission,
     );
 
-    // Parse submission files
     const submissionFiles = parseSubmissionFiles(updatedSubmission.submissionFile);
 
-    // Return response DTO
     const response: SubmissionResponseDto = {
       id: updatedSubmission.id,
       submissionFiles: submissionFiles,
@@ -825,4 +699,3 @@ export class AssignmentsService {
     return response;
   }
 }
-

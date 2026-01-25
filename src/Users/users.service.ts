@@ -139,7 +139,7 @@ export class UsersService {
 
   async getAllStudents(page: number = 1, limit: number = 10): Promise<any> {
     const [students, total] = await this.usersRepository.findAndCount({
-      where: { role: { id: 3 } },
+      where: { role: { id: 3 }, isDelete: false },
       relations: ['role'],
       skip: (page - 1) * limit,
       take: limit,
@@ -296,7 +296,7 @@ export class UsersService {
 
   async getAllTeachers(page: number = 1, limit: number = 10): Promise<any> {
     const [teachers, total] = await this.usersRepository.findAndCount({
-      where: { role: { id: 2 } },
+      where: { role: { id: 2 }, isDelete: false },
       relations: ['role'],
       skip: (page - 1) * limit,
       take: limit,
