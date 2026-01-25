@@ -5,6 +5,7 @@ import {
   JoinColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
 } from "typeorm";
 import { Assignment } from "./Assignment";
@@ -13,6 +14,7 @@ import { CourseCategory } from "./CourseCategory";
 import { CourseRating } from "./CourseRating";
 import { Courses } from "./Courses";
 import { Enrollment } from "./Enrollment";
+import { GoogleCredentials } from "./GoogleCredentials";
 import { Lectures } from "./Lectures";
 import { Resources } from "./Resources";
 import { Sections } from "./Sections";
@@ -113,6 +115,12 @@ export class Users {
 
   @OneToMany(() => Enrollment, (enrollment) => enrollment.student)
   enrollments2: Enrollment[];
+
+  @OneToOne(
+    () => GoogleCredentials,
+    (googleCredentials) => googleCredentials.user
+  )
+  googleCredentials: GoogleCredentials;
 
   @OneToMany(() => Lectures, (lectures) => lectures.createdBy)
   lectures: Lectures[];
