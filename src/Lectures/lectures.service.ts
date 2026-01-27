@@ -16,6 +16,9 @@ import { CreateLiveLectureDto } from './dto/create-live-lecture.dto';
 import { UpdateLectureDto } from './dto/update-lecture.dto';
 import { LectureResponseDto } from './dto/lecture-response.dto';
 import { uploadDocumentToCloudinary } from 'src/Cloudinary/cloudinary.helper';
+import { AttendanceDetails } from 'src/Entities/entities/AttendanceDetails';
+import { Attendance } from 'src/Entities/entities/Attendance';
+import { Enrollment } from 'src/Entities/entities/Enrollment';
 
 @Injectable()
 export class LecturesService {
@@ -28,6 +31,13 @@ export class LecturesService {
     private readonly sectionRepository: Repository<Sections>,
     @InjectRepository(Users)
     private readonly userRepository: Repository<Users>,
+    @InjectRepository(Attendance)
+    private readonly attendanceRepository: Repository<Attendance>,
+    @InjectRepository(AttendanceDetails)
+    private readonly attendanceDetailsRepository: Repository<AttendanceDetails>,
+    @InjectRepository(Enrollment)
+    private readonly enrollmentRepository: Repository<Enrollment>,
+
     private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
@@ -137,65 +147,160 @@ export class LecturesService {
   /**
    * Create live lecture with Google Meet meeting
    */
+  // async createLiveLecture(
+  //   dto: CreateLiveLectureDto,
+  //   userId: number,
+  //   roleId: number,
+  // ): Promise<LectureResponseDto> {
+  //   // Validate course access
+  //   await this.validateCourseAccess(dto.courseId, userId, roleId);
+
+  //   // Validate section belongs to course
+  //   await this.validateSectionBelongsToCourse(dto.sectionId, dto.courseId);
+
+  //   // Check if teacher has connected Google Calendar
+  //   const connectionStatus = await this.googleCalendarService.getConnectionStatus(
+  //     userId,
+  //   );
+
+  //   if (!connectionStatus.connected) {
+  //     throw new BadRequestException(
+  //       'Google Calendar not connected. Please connect your Google Calendar to create live lectures.',
+  //     );
+  //   }
+
+  //   let meetingLink: string | null = null;
+
+  //   // Create event in Google Calendar with Google Meet
+  //   try {
+  //     const eventResponse = await this.googleCalendarService.createEvent(
+  //       userId,
+  //       {
+  //         title: dto.title,
+  //         startDateTime: new Date(dto.liveStart).toISOString(),
+  //         duration: 60, // Default 1 hour, can be made configurable
+  //         description: dto.description || '',
+  //       },
+  //     );
+  //     meetingLink = eventResponse.meetLink || eventResponse.htmlLink;
+  //   } catch (error) {
+  //     throw new BadRequestException(
+  //       `Failed to create Google Meet event: ${error.message}`,
+  //     );
+  //   }
+
+  //   // Create lecture
+  //   const lecture = new Lectures();
+  //   lecture.title = dto.title;
+  //   lecture.description = dto.description || null;
+  //   lecture.lectureType = 'online';
+  //   lecture.liveStart = new Date(dto.liveStart);
+  //   lecture.meetingLink = meetingLink;
+  //   lecture.lectureOrder = dto.lectureOrder || null;
+  //   lecture.createdAt = new Date();
+  //   lecture.createdBy = { id: userId } as Users;
+  //   lecture.course = { id: dto.courseId } as Courses;
+  //   lecture.section = { id: dto.sectionId } as Sections;
+
+  //   const savedLecture = await this.lectureRepository.save(lecture);
+  //   const fetchedLecture = await this.lectureRepository.findOne({
+  //     where: { id: savedLecture.id },
+  //     relations: ['createdBy', 'updatedBy'],
+  //   });
+
+  //   if (!fetchedLecture) {
+  //     throw new BadRequestException('Failed to retrieve saved lecture');
+  //   }
+
+  //   return this.mapLectureToDto(fetchedLecture);
+  // }
   async createLiveLecture(
     dto: CreateLiveLectureDto,
     userId: number,
     roleId: number,
   ): Promise<LectureResponseDto> {
-    // Validate course access
     await this.validateCourseAccess(dto.courseId, userId, roleId);
-
-    // Validate section belongs to course
     await this.validateSectionBelongsToCourse(dto.sectionId, dto.courseId);
 
-    // Check if teacher has connected Google Calendar
-    const connectionStatus = await this.googleCalendarService.getConnectionStatus(
-      userId,
-    );
+    const connectionStatus =
+      await this.googleCalendarService.getConnectionStatus(userId);
 
     if (!connectionStatus.connected) {
       throw new BadRequestException(
-        'Google Calendar not connected. Please connect your Google Calendar to create live lectures.',
+        'Google Calendar not connected. Please connect your Google Calendar.',
       );
     }
 
     let meetingLink: string | null = null;
 
-    // Create event in Google Calendar with Google Meet
     try {
       const eventResponse = await this.googleCalendarService.createEvent(
         userId,
         {
           title: dto.title,
           startDateTime: new Date(dto.liveStart).toISOString(),
-          duration: 60, // Default 1 hour, can be made configurable
+          duration: 60,
           description: dto.description || '',
         },
       );
+
       meetingLink = eventResponse.meetLink || eventResponse.htmlLink;
     } catch (error) {
       throw new BadRequestException(
         `Failed to create Google Meet event: ${error.message}`,
       );
     }
-
-    // Create lecture
-    const lecture = new Lectures();
-    lecture.title = dto.title;
-    lecture.description = dto.description || null;
-    lecture.lectureType = 'online';
-    lecture.liveStart = new Date(dto.liveStart);
-    lecture.meetingLink = meetingLink;
-    lecture.lectureOrder = dto.lectureOrder || null;
-    lecture.createdAt = new Date();
-    lecture.createdBy = { id: userId } as Users;
-    lecture.course = { id: dto.courseId } as Courses;
-    lecture.section = { id: dto.sectionId } as Sections;
+    // create live lecture
+    const lecture = this.lectureRepository.create({
+      title: dto.title,
+      description: dto.description || null,
+      lectureType: 'online',
+      liveStart: new Date(dto.liveStart),
+      meetingLink,
+      lectureOrder: dto.lectureOrder || null,
+      createdAt: new Date(),
+      createdBy: { id: userId } as Users,
+      course: { id: dto.courseId } as Courses,
+      section: { id: dto.sectionId } as Sections,
+    });
 
     const savedLecture = await this.lectureRepository.save(lecture);
+
+    // CREATE ATTENDANCE
+    const attendance = this.attendanceRepository.create({
+      attendanceDate: new Date(dto.liveStart).toISOString().split('T')[0],
+      lecture: { id: savedLecture.id } as Lectures,
+      teacher: { id: userId } as Users,
+      createdAt: new Date(),
+    });
+
+    const savedAttendance = await this.attendanceRepository.save(attendance);
+
+    // CREATE ATTENDANCE DETAILS
+    const enrollments = await this.enrollmentRepository.find({
+      where: {
+        courseId: dto.courseId,
+        status: 'enrolled', 
+      },
+    });
+
+    // CREATE ATTENDANCE DETAILS RECORDS FOR EACH ENROLLED STUDENT
+    if (enrollments.length > 0) {
+      const attendanceDetails = enrollments.map((enroll) =>
+        this.attendanceDetailsRepository.create({
+          attendance: { id: savedAttendance.id } as Attendance,
+          student: { id: enroll.studentId } as Users,
+          status: '-', 
+        }),
+      );
+
+      await this.attendanceDetailsRepository.save(attendanceDetails);
+    }
+
+    // FETCH AND RETURN LECTURE DTO
     const fetchedLecture = await this.lectureRepository.findOne({
       where: { id: savedLecture.id },
-      relations: ['createdBy', 'updatedBy'],
+      relations: ['createdBy', 'updatedBy', 'course', 'section'],
     });
 
     if (!fetchedLecture) {
@@ -232,7 +337,7 @@ export class LecturesService {
       },
     });
 
-    return lectures.map(lecture => this.mapLectureToDto(lecture));
+    return lectures.map((lecture) => this.mapLectureToDto(lecture));
   }
 
   /**

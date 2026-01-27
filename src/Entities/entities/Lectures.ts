@@ -4,8 +4,10 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
+import { Attendance } from "./Attendance";
 import { Courses } from "./Courses";
 import { Users } from "./Users";
 import { Sections } from "./Sections";
@@ -64,6 +66,9 @@ export class Lectures {
 
   @Column("timestamp without time zone", { name: "updated_at", nullable: true })
   updatedAt: Date | null;
+
+  @OneToMany(() => Attendance, (attendance) => attendance.lecture)
+  attendances: Attendance[];
 
   @ManyToOne(() => Courses, (courses) => courses.lectures, {
     onDelete: "CASCADE",

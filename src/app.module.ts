@@ -14,6 +14,7 @@ import { CourseManagementModule } from './CourseManagement/course-management.mod
 import { ResourcesModule } from './Resources/resources.module';
 import { GoogleCalendarModule } from './GoogleCalendar/google-calendar.module';
 import { LecturesModule } from './Lectures/lectures.module';
+import { AttendanceModule } from './Attendance/attendance.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -51,6 +52,7 @@ import { LecturesModule } from './Lectures/lectures.module';
     ResourcesModule,
     GoogleCalendarModule,
     LecturesModule,
+    AttendanceModule,
   ],
 })
 export class AppModule {}

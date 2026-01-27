@@ -10,6 +10,8 @@ import {
 } from "typeorm";
 import { Assignment } from "./Assignment";
 import { AssignmentSubmission } from "./AssignmentSubmission";
+import { Attendance } from "./Attendance";
+import { AttendanceDetails } from "./AttendanceDetails";
 import { CourseCategory } from "./CourseCategory";
 import { CourseRating } from "./CourseRating";
 import { Courses } from "./Courses";
@@ -91,6 +93,18 @@ export class Users {
     (assignmentSubmission) => assignmentSubmission.student
   )
   assignmentSubmissions2: AssignmentSubmission[];
+
+  @OneToMany(() => Attendance, (attendance) => attendance.teacher)
+  attendances: Attendance[];
+
+  @OneToMany(() => Attendance, (attendance) => attendance.updatedBy)
+  attendances2: Attendance[];
+
+  @OneToMany(
+    () => AttendanceDetails,
+    (attendanceDetails) => attendanceDetails.student
+  )
+  attendanceDetails: AttendanceDetails[];
 
   @OneToMany(() => CourseCategory, (courseCategory) => courseCategory.createdBy)
   courseCategories: CourseCategory[];

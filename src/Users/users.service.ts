@@ -158,66 +158,64 @@ export class UsersService {
     };
   }
 
-  async getStudentById(studentId: number): Promise<Users> {
-    const student = await this.usersRepository.findOne({
-      where: { id: studentId, role: { id: 3 } },
+  async getUserById(userId: number): Promise<Users> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
       relations: ['role'],
     });
 
-    if (!student) {
-      throw new NotFoundException('Student not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    return student;
+    return user;
   }
 
-  async updateStudent(
-    studentId: number,
+  async updateUser(
+    userId: number,
     editStudentDto: EditStudentDto,
     adminId: number,
   ): Promise<Users> {
-    const student = await this.getStudentById(studentId);
-
+    const user = await this.getUserById(userId);
     // Check if email is being changed and if it already exists
-    if (editStudentDto.email && editStudentDto.email !== student.email) {
-      const existingStudent = await this.usersRepository.findOne({
+    if (editStudentDto.email && editStudentDto.email !== user.email) {
+      const existingUser = await this.usersRepository.findOne({
         where: { email: editStudentDto.email },
       });
 
-      if (existingStudent) {
+      if (existingUser) {
         throw new ConflictException('Email already exists');
       }
-      student.email = editStudentDto.email;
+      user.email = editStudentDto.email;
     }
 
     if (editStudentDto.firstName) {
-      student.firstName = editStudentDto.firstName;
+      user.firstName = editStudentDto.firstName;
     }
 
     if (editStudentDto.lastName) {
-      student.lastName = editStudentDto.lastName;
+      user.lastName = editStudentDto.lastName;
     }
 
     if (editStudentDto.password) {
-      student.hashedPassword = await bcrypt.hash(editStudentDto.password, 10);
+      user.hashedPassword = await bcrypt.hash(editStudentDto.password, 12);
     }
 
     if (editStudentDto.contactNumber !== undefined) {
-      student.contactNumber = editStudentDto.contactNumber;
+      user.contactNumber = editStudentDto.contactNumber;
     }
 
     if (editStudentDto.isActive !== undefined) {
-      student.isActive = editStudentDto.isActive;
+      user.isActive = editStudentDto.isActive;
     }
 
-    student.updatedAt = new Date();
-    student.updatedBy = adminId as any;
-
-    return this.usersRepository.save(student);
+    user.updatedAt = new Date();
+    user.updatedBy = adminId as any;
+    return this.usersRepository.save(user);
   }
 
   async deleteStudent(studentId: number, adminId: number): Promise<{ message: string }> {
-    const student = await this.getStudentById(studentId);
+    const student = await this.getUserById(studentId);
 
     student.isDelete = true;
     student.deletedAt = new Date();
