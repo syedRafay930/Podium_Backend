@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DeepPartial } from 'typeorm';
@@ -14,12 +15,25 @@ import { Users } from 'src/Entities/entities/Users';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { AssignmentSubmissionStatus } from './dto/assignment-status.enum';
-import { AssignmentDetailResponseDto, AssignmentMaterialDto } from './dto/assignment-detail-response.dto';
-import { AssignmentResponseDto, AssignmentMaterialBasicDto } from './dto/assignment-response.dto';
-import { validateFiles, sanitizeFilename, parseSubmissionFiles } from './utils/file-validator.util';
+import {
+  AssignmentDetailResponseDto,
+  AssignmentMaterialDto,
+} from './dto/assignment-detail-response.dto';
+import {
+  AssignmentResponseDto,
+  AssignmentMaterialBasicDto,
+} from './dto/assignment-response.dto';
+import {
+  validateFiles,
+  sanitizeFilename,
+  parseSubmissionFiles,
+} from './utils/file-validator.util';
 import { uploadDocumentToCloudinary } from 'src/Cloudinary/cloudinary.helper';
 import { SubmissionResponseDto } from './dto/submission-response.dto';
-import { PaginatedSubmissionsResponseDto, StudentSubmissionDto } from './dto/assignment-submissions-response.dto';
+import {
+  PaginatedSubmissionsResponseDto,
+  StudentSubmissionDto,
+} from './dto/assignment-submissions-response.dto';
 import { GradeSubmissionDto } from './dto/grade-submission.dto';
 
 @Injectable()
@@ -75,7 +89,11 @@ export class AssignmentsService {
 
     if (roleId === 3) {
       query
-        .innerJoin(Enrollment, 'enrollment', 'enrollment.courseId = assignment.course.id')
+        .innerJoin(
+          Enrollment,
+          'enrollment',
+          'enrollment.courseId = assignment.course.id',
+        )
         .where('enrollment.studentId = :userId', { userId });
 
       if (status) {
@@ -133,7 +151,11 @@ export class AssignmentsService {
 
     if (roleId === 3) {
       countQuery
-        .innerJoin(Enrollment, 'enrollment', 'enrollment.courseId = assignment.course.id')
+        .innerJoin(
+          Enrollment,
+          'enrollment',
+          'enrollment.courseId = assignment.course.id',
+        )
         .where('enrollment.studentId = :userId', { userId });
 
       if (status) {
@@ -180,16 +202,16 @@ export class AssignmentsService {
 
     const total = await countQuery.getCount();
 
-    const assignmentDtos: AssignmentResponseDto[] = assignments.map((assignment) => {
-      const materials: AssignmentMaterialBasicDto[] = assignment.assignmentMaterials?.map(
-        (material) => ({
+    const assignmentDtos: AssignmentResponseDto[] = assignments.map(
+      (assignment) => {
+        const materials: AssignmentMaterialBasicDto[] =
+          assignment.assignmentMaterials?.map((material) => ({
             id: material.id,
             fileUrl: material.fileUrl,
             fileName: material.fileName,
             fileSize: material.fileSize,
             fileType: material.fileType,
-        }),
-      ) || [];
+          })) || [];
 
         return {
           id: assignment.id,
@@ -211,7 +233,8 @@ export class AssignmentsService {
             lastName: assignment.createdBy.lastName,
           },
         };
-    });
+      },
+    );
 
     return {
       data: assignmentDtos,
@@ -232,7 +255,9 @@ export class AssignmentsService {
     files?: Express.Multer.File[],
   ) {
     if (roleId !== 1 && roleId !== 2) {
-      throw new ForbiddenException('Only admins and teachers can create assignments');
+      throw new ForbiddenException(
+        'Only admins and teachers can create assignments',
+      );
     }
 
     const course = await this.courseRepository.findOne({
@@ -296,7 +321,7 @@ export class AssignmentsService {
     });
 
     if (enrollments.length > 0) {
-      const submissionPromises = enrollments.map(enrollment => {
+      const submissionPromises = enrollments.map((enrollment) => {
         const submission = this.assignmentSubmissionRepository.create({
           assignment: savedAssignment,
           student: enrollment.student,
@@ -352,7 +377,12 @@ export class AssignmentsService {
   ): Promise<AssignmentDetailResponseDto> {
     const assignment = await this.assignmentRepository.findOne({
       where: { id: assignmentId },
-      relations: ['course', 'createdBy', 'course.teacher', 'assignmentMaterials'],
+      relations: [
+        'course',
+        'createdBy',
+        'course.teacher',
+        'assignmentMaterials',
+      ],
     });
 
     if (!assignment) {
@@ -385,15 +415,14 @@ export class AssignmentsService {
       throw new ForbiddenException('Invalid role');
     }
 
-    const materials: AssignmentMaterialDto[] = assignment.assignmentMaterials?.map(
-      (material) => ({
+    const materials: AssignmentMaterialDto[] =
+      assignment.assignmentMaterials?.map((material) => ({
         id: material.id,
         fileUrl: material.fileUrl,
         fileName: material.fileName,
         fileSize: material.fileSize,
         fileType: material.fileType,
-      }),
-    ) || [];
+      })) || [];
 
     const response: AssignmentDetailResponseDto = {
       id: assignment.id,
@@ -483,7 +512,9 @@ export class AssignmentsService {
         const uploadResult = await uploadDocumentToCloudinary(file);
         return uploadResult.secure_url;
       } catch (error) {
-        throw new BadRequestException(`Failed to upload file: ${file.originalname}`);
+        throw new BadRequestException(
+          `Failed to upload file: ${file.originalname}`,
+        );
       }
     });
 
@@ -493,9 +524,7 @@ export class AssignmentsService {
 
     const now = new Date();
     const isLate =
-      assignment.dueDate && new Date(assignment.dueDate) < now
-        ? true
-        : false;
+      assignment.dueDate && new Date(assignment.dueDate) < now ? true : false;
 
     const submissionStatus = isLate
       ? AssignmentSubmissionStatus.LATE
@@ -505,11 +534,12 @@ export class AssignmentsService {
     submission.submittedAt = now;
     submission.status = submissionStatus;
 
-    const updatedSubmission = await this.assignmentSubmissionRepository.save(
-      submission,
-    );
+    const updatedSubmission =
+      await this.assignmentSubmissionRepository.save(submission);
 
-    const submissionFiles = parseSubmissionFiles(updatedSubmission.submissionFile);
+    const submissionFiles = parseSubmissionFiles(
+      updatedSubmission.submissionFile,
+    );
 
     const response: SubmissionResponseDto = {
       id: updatedSubmission.id,
@@ -533,7 +563,9 @@ export class AssignmentsService {
     limit: number,
   ): Promise<PaginatedSubmissionsResponseDto> {
     if (roleId !== 2) {
-      throw new ForbiddenException('Only teachers can view assignment submissions');
+      throw new ForbiddenException(
+        'Only teachers can view assignment submissions',
+      );
     }
 
     const assignment = await this.assignmentRepository.findOne({
@@ -572,7 +604,9 @@ export class AssignmentsService {
     const studentSubmissions: StudentSubmissionDto[] = enrollments.map(
       (enrollment) => {
         const submission = submissionMap.get(enrollment.student.id);
-        const submissionFiles = parseSubmissionFiles(submission?.submissionFile || null);
+        const submissionFiles = parseSubmissionFiles(
+          submission?.submissionFile || null,
+        );
 
         return {
           studentId: enrollment.student.id,
@@ -617,7 +651,9 @@ export class AssignmentsService {
     roleId: number,
   ): Promise<SubmissionResponseDto> {
     if (roleId !== 2) {
-      throw new ForbiddenException('Only teachers can grade assignment submissions');
+      throw new ForbiddenException(
+        'Only teachers can grade assignment submissions',
+      );
     }
 
     const assignment = await this.assignmentRepository.findOne({
@@ -650,12 +686,18 @@ export class AssignmentsService {
       throw new NotFoundException('Submission not found');
     }
 
-    if (gradeDto.marksObtained !== undefined && gradeDto.marksObtained !== null) {
+    if (
+      gradeDto.marksObtained !== undefined &&
+      gradeDto.marksObtained !== null
+    ) {
       if (gradeDto.marksObtained < 0) {
         throw new BadRequestException('Marks obtained cannot be negative');
       }
 
-      if (assignment.totalMarks !== null && assignment.totalMarks !== undefined) {
+      if (
+        assignment.totalMarks !== null &&
+        assignment.totalMarks !== undefined
+      ) {
         if (gradeDto.marksObtained > assignment.totalMarks) {
           throw new BadRequestException(
             `Marks obtained (${gradeDto.marksObtained}) cannot exceed total marks (${assignment.totalMarks})`,
@@ -683,11 +725,12 @@ export class AssignmentsService {
 
     submission.gradedBy = teacher;
 
-    const updatedSubmission = await this.assignmentSubmissionRepository.save(
-      submission,
-    );
+    const updatedSubmission =
+      await this.assignmentSubmissionRepository.save(submission);
 
-    const submissionFiles = parseSubmissionFiles(updatedSubmission.submissionFile);
+    const submissionFiles = parseSubmissionFiles(
+      updatedSubmission.submissionFile,
+    );
 
     const response: SubmissionResponseDto = {
       id: updatedSubmission.id,
@@ -701,5 +744,30 @@ export class AssignmentsService {
     };
 
     return response;
+  }
+
+  async DeleteAssignment(assignmentId: number) {
+    const assignment = await this.assignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException(
+        `Assignment with ID ${assignmentId} not found`,
+      );
+    }
+
+    try {
+      await this.assignmentRepository.delete(assignmentId);
+
+      return {
+        success: true,
+        message: `Assignment ID ${assignmentId} and all its related submissions have been permanently deleted.`,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Could not delete assignment: ' + error.message,
+      );
+    }
   }
 }

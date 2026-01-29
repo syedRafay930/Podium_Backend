@@ -12,6 +12,7 @@ import {
   Param,
   UseInterceptors,
   UploadedFiles,
+  Delete,
   Res,
   HttpException,
   ParseIntPipe,
@@ -423,5 +424,17 @@ export class AssignmentsController {
       roleId,
     );
   }
+
+    @UseGuards(JwtBlacklistGuard)
+    @ApiBearerAuth('JWT-auth')
+    @Delete('delete/:id')
+    @ApiOperation({ summary: 'Permanently delete a assignment (Hard Delete)' })
+    @ApiParam({ name: 'id', description: 'The ID of the assignment to remove permanently', example: 5 })
+    @ApiResponse({ status: 200, description: 'Assignment and its components deleted permanently.' })
+    @ApiResponse({ status: 404, description: 'Assignment not found.' })
+    async Remove(@Param('id') id: number) {
+      return await this.assignmentsService.DeleteAssignment(id);
+    }
+  
 }
 
