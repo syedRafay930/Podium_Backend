@@ -11,11 +11,13 @@ import { CourseManagementController } from './course-management.controller';
 import { CourseManagementService } from './course-management.service';
 import { AuthModule } from '../Auth/auth.module';
 import { CloudinaryModule } from '../Cloudinary/cloudinary.module';
+import { Quizzes } from 'src/Entities/entities/Quizzes';
+
 //import { ResourcesModule } from '../Resources/resources.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Sections, Resources, Courses, Users, Assignment, Lectures, Enrollment]),
+    TypeOrmModule.forFeature([Sections, Resources, Courses, Users, Assignment, Lectures, Enrollment, Quizzes]),
     AuthModule,
     CloudinaryModule,
     //ResourcesModule,

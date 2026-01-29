@@ -12,6 +12,7 @@ import { Courses } from 'src/Entities/entities/Courses';
 import { Users } from 'src/Entities/entities/Users';
 import { Assignment } from 'src/Entities/entities/Assignment';
 import { Lectures } from 'src/Entities/entities/Lectures';
+import { Quizzes } from 'src/Entities/entities/Quizzes';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
@@ -23,6 +24,7 @@ import { ResourceListResponseDto } from 'src/Resources/dto/resource-list-respons
 //import { ResourcesService } from 'src/Resources/resources.service';
 import { uploadDocumentToCloudinary } from 'src/Cloudinary/cloudinary.helper';
 import { v2 as cloudinary } from 'cloudinary';
+
 
 @Injectable()
 export class CourseManagementService {
@@ -41,6 +43,8 @@ export class CourseManagementService {
     private readonly lectureRepository: Repository<Lectures>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(Quizzes)
+    private readonly quizRepository: Repository<Quizzes>,
     //private readonly resourcesService: ResourcesService,
   ) {}
 
@@ -140,7 +144,11 @@ export class CourseManagementService {
     // For each section, fetch assignments, lectures, and resources
     const sectionsWithContent = await Promise.all(
       sections.map(async (section) => {
-        const [assignments, lectures, resources] = await Promise.all([
+        const quizWhereCondition: any = { section_id: section.id, isDelete: false };
+        if (roleId === 3) { 
+          quizWhereCondition.isPublished = true;
+        }
+        const [assignments, lectures, resources, quizzes] = await Promise.all([
           this.assignmentRepository.find({
             where: { sectionId: section.id },
             relations: ['createdBy', 'assignmentMaterials'],
@@ -158,6 +166,11 @@ export class CourseManagementService {
             relations: ['createdBy2'],
             order: { createdAt: 'ASC' },
           }),
+          this.quizRepository.find({
+          where: quizWhereCondition,
+          relations: ['createdBy'],
+          order: { createdAt: 'ASC' },
+        }),
         ]);
 
         return this.mapSectionWithContentToDto(
@@ -165,6 +178,7 @@ export class CourseManagementService {
           assignments,
           lectures,
           resources,
+          quizzes
         );
       }),
     );
@@ -200,7 +214,11 @@ export class CourseManagementService {
     // Get sections with content grouped by section
     const sectionsWithContent = await Promise.all(
       sections.map(async (section) => {
-        const [assignments, lectures, resources] = await Promise.all([
+        const quizWhereCondition: any = { section_id: section.id, isDelete: false };
+        if (roleId === 3) { 
+          quizWhereCondition.isPublished = true;
+        }
+        const [assignments, lectures, resources, quizzes] = await Promise.all([
           this.assignmentRepository.find({
             where: { sectionId: section.id },
             relations: ['createdBy', 'assignmentMaterials'],
@@ -218,6 +236,11 @@ export class CourseManagementService {
             relations: ['createdBy2'],
             order: { createdAt: 'ASC' },
           }),
+          this.quizRepository.find({
+          where: quizWhereCondition,
+          relations: ['createdBy'],
+          order: { createdAt: 'ASC' },
+        }),
         ]);
 
         return this.mapSectionWithContentToDto(
@@ -225,6 +248,7 @@ export class CourseManagementService {
           assignments,
           lectures,
           resources,
+          quizzes
         );
       }),
     );
@@ -385,6 +409,7 @@ export class CourseManagementService {
     assignments: Assignment[],
     lectures: Lectures[],
     resources: Resources[],
+    quizzes: Quizzes[],
   ): SectionWithContentResponseDto {
     const dto: SectionWithContentResponseDto = {
       id: section.id,
@@ -396,6 +421,7 @@ export class CourseManagementService {
       assignments: assignments.map((a) => this.mapAssignmentToDto(a)),
       lectures: lectures.map((l) => this.mapLectureToDto(l)),
       resources: resources.map((r) => this.mapResourceToContentDto(r)),
+      quizzes: quizzes.map((q) => this.mapQuizToDto(q)),
     };
 
     if (section.createdBy2) {
@@ -508,4 +534,24 @@ export class CourseManagementService {
       return null;
     }
   }
+
+  private mapQuizToDto(quiz: Quizzes) {
+  return {
+    id: quiz.id,
+    title: quiz.title,
+    description: quiz.description,
+    totalMarks: quiz.totalMarks,
+    startTime: quiz.startTime,
+    endTime: quiz.endTime,
+    isPublished: quiz.isPublished ?? false,
+    createdAt: quiz.createdAt,
+    createdBy: quiz.createdBy
+      ? {
+          id: quiz.createdBy.id,
+          firstName: quiz.createdBy.firstName,
+          lastName: quiz.createdBy.lastName,
+        }
+      : undefined,
+  };
+}
 }

@@ -24,7 +24,10 @@ import {
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { GoogleCalendarService } from './google-calendar.service';
 import { CreateEventDto } from './dto/create-event.dto';
-import { EventResponseDto, ConnectionStatusDto } from './dto/event-response.dto';
+import {
+  EventResponseDto,
+  ConnectionStatusDto,
+} from './dto/event-response.dto';
 import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Google Calendar')
@@ -43,7 +46,8 @@ export class GoogleCalendarController {
   @Get('connect')
   @ApiOperation({
     summary: 'Connect Google Calendar',
-    description: 'Teacher only - Initiate OAuth flow to connect Google Calendar account',
+    description:
+      'Teacher only - Initiate OAuth flow to connect Google Calendar account',
   })
   @ApiResponse({
     status: 302,
@@ -57,14 +61,16 @@ export class GoogleCalendarController {
     status: 403,
     description: 'Forbidden - Only teachers can connect Google Calendar',
   })
-  async connect(@Request() req, @Res() res: Response) {
+  async connect(@Request() req) {
     // Check if user is teacher (role_id = 2)
     if (req.user.role_id !== 2) {
-      throw new UnauthorizedException('Only teachers can connect Google Calendar');
+      throw new UnauthorizedException(
+        'Only teachers can connect Google Calendar',
+      );
     }
 
     const authUrl = this.googleCalendarService.getAuthUrl(req.user.id);
-    return res.redirect(authUrl);
+    return authUrl;
   }
 
   /**
@@ -99,14 +105,23 @@ export class GoogleCalendarController {
     @Res() res: Response,
   ) {
     try {
-      const _result = await this.googleCalendarService.handleCallback(code, state);
-      
+      const _result = await this.googleCalendarService.handleCallback(
+        code,
+        state,
+      );
+
       // Redirect to frontend success page
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:5173';
       return res.redirect(`${frontendUrl}/google-calendar/success`);
     } catch (error) {
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
-      return res.redirect(`${frontendUrl}/google-calendar/error?message=${encodeURIComponent(error.message)}`);
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        'http://localhost:5173';
+      return res.redirect(
+        `${frontendUrl}/google-calendar/error?message=${encodeURIComponent(error.message)}`,
+      );
     }
   }
 
@@ -134,7 +149,9 @@ export class GoogleCalendarController {
   async getStatus(@Request() req): Promise<ConnectionStatusDto> {
     // Check if user is teacher (role_id = 2)
     if (req.user.role_id !== 2) {
-      throw new UnauthorizedException('Only teachers can check connection status');
+      throw new UnauthorizedException(
+        'Only teachers can check connection status',
+      );
     }
 
     return this.googleCalendarService.getConnectionStatus(req.user.id);
@@ -168,7 +185,9 @@ export class GoogleCalendarController {
   async disconnect(@Request() req) {
     // Check if user is teacher (role_id = 2)
     if (req.user.role_id !== 2) {
-      throw new UnauthorizedException('Only teachers can disconnect Google Calendar');
+      throw new UnauthorizedException(
+        'Only teachers can disconnect Google Calendar',
+      );
     }
 
     await this.googleCalendarService.disconnect(req.user.id);
@@ -209,7 +228,8 @@ export class GoogleCalendarController {
   })
   async listEvents(
     @Request() req,
-    @Query('maxResults', new ParseIntPipe({ optional: true })) maxResults?: number,
+    @Query('maxResults', new ParseIntPipe({ optional: true }))
+    maxResults?: number,
   ): Promise<EventResponseDto[]> {
     // Check if user is teacher (role_id = 2)
     if (req.user.role_id !== 2) {
@@ -265,4 +285,3 @@ export class GoogleCalendarController {
     return this.googleCalendarService.createEvent(req.user.id, createEventDto);
   }
 }
-

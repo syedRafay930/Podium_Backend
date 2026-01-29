@@ -10,8 +10,8 @@ import { Users } from "./Users";
 
 @Index("google_credentials_pkey", ["id"], { unique: true })
 @Index("idx_google_credentials_is_active", ["isActive"], {})
-@Index("google_credentials_user_id_key", ["userId"], { unique: true })
 @Index("idx_google_credentials_user_id", ["userId"], {})
+@Index("google_credentials_user_id_key", ["userId"], { unique: true })
 @Entity("google_credentials", { schema: "public" })
 export class GoogleCredentials {
   @PrimaryGeneratedColumn({ type: "integer", name: "id" })

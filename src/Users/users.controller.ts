@@ -84,11 +84,6 @@ export class UsersController {
     @Param('userId', ParseIntPipe) userId: number,
     @Body() editStudentDto: EditStudentDto,
   ) {
-    // Check if user is admin
-    if (req.user.role_id !== 1) {
-      throw new UnauthorizedException('Only admins can update students');
-    }
-
     return this.usersService.updateUser(userId, editStudentDto, req.user.id);
   }
 

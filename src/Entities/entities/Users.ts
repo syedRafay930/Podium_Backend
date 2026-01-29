@@ -18,6 +18,8 @@ import { Courses } from "./Courses";
 import { Enrollment } from "./Enrollment";
 import { GoogleCredentials } from "./GoogleCredentials";
 import { Lectures } from "./Lectures";
+import { QuizAttempts } from "./QuizAttempts";
+import { Quizzes } from "./Quizzes";
 import { Resources } from "./Resources";
 import { Sections } from "./Sections";
 import { UserRole } from "./UserRole";
@@ -141,6 +143,12 @@ export class Users {
 
   @OneToMany(() => Lectures, (lectures) => lectures.updatedBy)
   lectures2: Lectures[];
+
+  @OneToMany(() => QuizAttempts, (quizAttempts) => quizAttempts.student)
+  quizAttempts: QuizAttempts[];
+
+  @OneToMany(() => Quizzes, (quizzes) => quizzes.createdBy)
+  quizzes: Quizzes[];
 
   @OneToMany(() => Resources, (resources) => resources.createdBy2)
   resources: Resources[];

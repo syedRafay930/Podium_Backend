@@ -13,6 +13,7 @@ import { CourseCategory } from "./CourseCategory";
 import { Users } from "./Users";
 import { Enrollment } from "./Enrollment";
 import { Lectures } from "./Lectures";
+import { Quizzes } from "./Quizzes";
 import { Resources } from "./Resources";
 import { Sections } from "./Sections";
 
@@ -97,6 +98,9 @@ export class Courses {
 
   @OneToMany(() => Lectures, (lectures) => lectures.course)
   lectures: Lectures[];
+
+  @OneToMany(() => Quizzes, (quizzes) => quizzes.course)
+  quizzes: Quizzes[];
 
   @OneToMany(() => Resources, (resources) => resources.course)
   resources: Resources[];

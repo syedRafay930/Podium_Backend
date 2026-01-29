@@ -158,6 +158,35 @@ export class ResourceDto {
   createdBy?: UserBasicDto;
 }
 
+export class QuizDto {
+  @ApiProperty({ description: 'Quiz ID', example: 1 })
+  id: number;
+
+  @ApiProperty({ description: 'Quiz title', example: 'TypeScript Mastery Quiz' })
+  title: string;
+
+  @ApiProperty({ description: 'Quiz description', example: 'Test your basic knowledge of TS', required: false })
+  description: string | null;
+
+  @ApiProperty({ description: 'Total marks for the quiz', example: 50, required: false })
+  totalMarks: number | null;
+
+  @ApiProperty({ description: 'Quiz start time', example: '2026-02-01T10:00:00Z' })
+  startTime: Date;
+
+  @ApiProperty({ description: 'Quiz end time', example: '2026-02-01T12:00:00Z' })
+  endTime: Date;
+
+  @ApiProperty({ description: 'Is the quiz published for students', example: true })
+  isPublished: boolean;
+
+  @ApiProperty({ description: 'Created at', example: '2026-01-01T00:00:00Z' })
+  createdAt: Date | null;
+
+  @ApiProperty({ description: 'Creator information', type: UserBasicDto, required: false })
+  createdBy?: UserBasicDto;
+}
+
 export class SectionWithContentResponseDto {
   @ApiProperty({ description: 'Section ID', example: 1 })
   id: number;
@@ -191,4 +220,7 @@ export class SectionWithContentResponseDto {
 
   @ApiProperty({ description: 'Resources in this section', type: [ResourceDto] })
   resources: ResourceDto[];
+
+  @ApiProperty({ description: 'Quizzes in this section', type: [QuizDto] })
+  quizzes: QuizDto[];
 }

@@ -9,6 +9,7 @@ import {
 } from "typeorm";
 import { Assignment } from "./Assignment";
 import { Lectures } from "./Lectures";
+import { Quizzes } from "./Quizzes";
 import { Resources } from "./Resources";
 import { Courses } from "./Courses";
 import { Users } from "./Users";
@@ -52,6 +53,9 @@ export class Sections {
 
   @OneToMany(() => Lectures, (lectures) => lectures.section)
   lectures: Lectures[];
+
+  @OneToMany(() => Quizzes, (quizzes) => quizzes.section)
+  quizzes: Quizzes[];
 
   @OneToMany(() => Resources, (resources) => resources.section)
   resources: Resources[];
