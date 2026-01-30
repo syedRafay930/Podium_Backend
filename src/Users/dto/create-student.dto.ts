@@ -50,11 +50,15 @@ export class CreateStudentDto {
   contactNumber?: string;
 
   @ApiProperty({
-    description: 'Student status (active or inactive)',
-    example: true,
-    type: Boolean,
+    description: 'Student password',
+    example: 'securePassword123',
+    type: String,
+    minLength: 6,
     required: false,
   })
   @IsOptional()
-  isActive?: boolean;
+  @IsString()
+  @MinLength(6)
+  password?: string;
+
 }

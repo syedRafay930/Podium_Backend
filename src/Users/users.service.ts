@@ -39,7 +39,7 @@ export class UsersService {
   async findByEmail(email: string): Promise<Users | null> {
     return this.usersRepository.findOne({
       where: { email: email },
-      relations: ['role'],      
+      relations: ['role'],
     });
   }
 
@@ -51,7 +51,7 @@ export class UsersService {
     if (user) {
       await this.usersRepository.update(
         { email: userEmail },
-        { hashedPassword: newPassword , updatedAt: new Date() , updatedBy: user},        
+        { hashedPassword: newPassword, updatedAt: new Date(), updatedBy: user },
       );
     }
   }
@@ -76,7 +76,7 @@ export class UsersService {
 
   async createStudent(
     createStudentDto: CreateStudentDto,
-    adminId: number,
+    adminId?: number,
   ): Promise<Users> {
     // Check if email already exists
     const existingStudent = await this.usersRepository.findOne({
@@ -97,8 +97,13 @@ export class UsersService {
     }
 
     // Hash password
-    const tempPassword = `${Date.now().toString(36)}`;
-    const hashedPassword = await bcrypt.hash(tempPassword, 12);
+    let finalPassword = createStudentDto.password;
+    let tempPassword = '';
+    if (!finalPassword) {
+      tempPassword = `${Date.now().toString(36)}`;
+      finalPassword = tempPassword;
+    }
+    const hashedPassword = await bcrypt.hash(finalPassword, 12);
 
     // Create student
     const student = this.usersRepository.create({
@@ -107,9 +112,9 @@ export class UsersService {
       email: createStudentDto.email,
       hashedPassword,
       contactNumber: createStudentDto.contactNumber || null,
-      isActive: createStudentDto.isActive ?? true,
+      isActive: true,
       role: studentRole,
-      createdBy: adminId as any,
+      createdBy: adminId ? (adminId as any) : null,
       createdAt: new Date(),
     });
 
@@ -126,7 +131,7 @@ export class UsersService {
           userName: `${createStudentDto.firstName} ${createStudentDto.lastName}`,
           userRole: 'Student',
           email: createStudentDto.email,
-          password: tempPassword,
+          password: tempPassword || 'Your chosen password',
           resetLink,
         },
       );
@@ -214,7 +219,10 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async deleteStudent(studentId: number, adminId: number): Promise<{ message: string }> {
+  async deleteStudent(
+    studentId: number,
+    adminId: number,
+  ): Promise<{ message: string }> {
     const student = await this.getUserById(studentId);
 
     student.isDelete = true;
@@ -223,7 +231,9 @@ export class UsersService {
 
     await this.usersRepository.save(student);
 
-    return { message: `Student ${student.firstName} ${student.lastName} deleted successfully` };
+    return {
+      message: `Student ${student.firstName} ${student.lastName} deleted successfully`,
+    };
   }
 
   // ==================== TEACHER CRUD ====================
@@ -371,7 +381,10 @@ export class UsersService {
     return this.usersRepository.save(teacher);
   }
 
-  async deleteTeacher(teacherId: number, adminId: number): Promise<{ message: string }> {
+  async deleteTeacher(
+    teacherId: number,
+    adminId: number,
+  ): Promise<{ message: string }> {
     const teacher = await this.getTeacherById(teacherId);
 
     teacher.isDelete = true;
@@ -380,6 +393,8 @@ export class UsersService {
 
     await this.usersRepository.save(teacher);
 
-    return { message: `Teacher ${teacher.firstName} ${teacher.lastName} deleted successfully` };
+    return {
+      message: `Teacher ${teacher.firstName} ${teacher.lastName} deleted successfully`,
+    };
   }
 }
