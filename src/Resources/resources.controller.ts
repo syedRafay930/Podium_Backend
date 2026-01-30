@@ -159,6 +159,7 @@ export class ResourcesController {
     }
 
     return this.resourcesService.createResourceBySection(
+      courseId,
       sectionId,
       createResourceDto,
       file,

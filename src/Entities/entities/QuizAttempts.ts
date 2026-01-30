@@ -7,8 +7,8 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
-import { Quizzes } from "./Quizzes";
 import { Users } from "./Users";
+import { Quizzes } from "./Quizzes";
 import { QuizStdAnswers } from "./QuizStdAnswers";
 
 @Index("quiz_attempts_pkey", ["id"], { unique: true })
@@ -30,13 +30,20 @@ export class QuizAttempts {
   })
   totalMarks: number | null;
 
+  @Column("text", { name: "comments", nullable: true })
+  comments: string | null;
+
+  @ManyToOne(() => Users, (users) => users.quizAttempts)
+  @JoinColumn([{ name: "graded_by", referencedColumnName: "id" }])
+  gradedBy: Users;
+
   @ManyToOne(() => Quizzes, (quizzes) => quizzes.quizAttempts, {
     onDelete: "CASCADE",
   })
   @JoinColumn([{ name: "quiz_id", referencedColumnName: "id" }])
   quiz: Quizzes;
 
-  @ManyToOne(() => Users, (users) => users.quizAttempts, {
+  @ManyToOne(() => Users, (users) => users.quizAttempts2, {
     onDelete: "CASCADE",
   })
   @JoinColumn([{ name: "student_id", referencedColumnName: "id" }])

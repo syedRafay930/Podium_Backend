@@ -144,8 +144,11 @@ export class Users {
   @OneToMany(() => Lectures, (lectures) => lectures.updatedBy)
   lectures2: Lectures[];
 
-  @OneToMany(() => QuizAttempts, (quizAttempts) => quizAttempts.student)
+  @OneToMany(() => QuizAttempts, (quizAttempts) => quizAttempts.gradedBy)
   quizAttempts: QuizAttempts[];
+
+  @OneToMany(() => QuizAttempts, (quizAttempts) => quizAttempts.student)
+  quizAttempts2: QuizAttempts[];
 
   @OneToMany(() => Quizzes, (quizzes) => quizzes.createdBy)
   quizzes: Quizzes[];

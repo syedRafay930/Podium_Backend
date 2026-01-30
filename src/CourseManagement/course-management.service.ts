@@ -261,7 +261,7 @@ export class CourseManagementService {
     // For admin (role_id = 1) and teacher (role_id = 2) - include enrollments
     if (roleId === 1 || roleId === 2) {
       const enrollments = await this.enrollmentRepository.find({
-        where: { courseId },
+        where: { courseId, status: 'enrolled' },
         relations: ['student'],
         order: { createdAt: 'ASC' },
       });

@@ -22,6 +22,7 @@ import { CreateQuizDto } from './dto/create_quiz_dto';
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { UpdateQuizDto } from './dto/update_quiz.dto';
 import { QuizDetailsResponseDto } from './dto/quiz_detail_response.dto';
+import { SubmitQuizDto } from './dto/submit_quiz.dto';
 
 @ApiTags('Quizzes')
 @Controller('quizzes')
@@ -76,5 +77,14 @@ export class QuizController {
     @Req() req,
   ) {
     return await this.quizService.getQuizById(id, req.user.role_id);
+  }
+
+  @UseGuards(JwtBlacklistGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Post('submit')
+  @ApiOperation({ summary: 'Student submits their quiz answers' })
+  @ApiResponse({ status: 201, description: 'Attempt recorded successfully.' })
+  async submit(@Body() submitDto: SubmitQuizDto, @Req() req) {
+    return await this.quizService.submitQuiz(req.user.id, submitDto);
   }
 }

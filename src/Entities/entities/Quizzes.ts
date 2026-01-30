@@ -6,52 +6,52 @@ import {
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
-} from 'typeorm';
-import { QuizAttempts } from './QuizAttempts';
-import { QuizQuestions } from './QuizQuestions';
-import { Courses } from './Courses';
-import { Users } from './Users';
-import { Sections } from './Sections';
+} from "typeorm";
+import { QuizAttempts } from "./QuizAttempts";
+import { QuizQuestions } from "./QuizQuestions";
+import { Courses } from "./Courses";
+import { Users } from "./Users";
+import { Sections } from "./Sections";
 
-@Index('quizzes_pkey', ['id'], { unique: true })
-@Entity('quizzes', { schema: 'public' })
+@Index("quizzes_pkey", ["id"], { unique: true })
+@Entity("quizzes", { schema: "public" })
 export class Quizzes {
-  @PrimaryGeneratedColumn({ type: 'integer', name: 'id' })
+  @PrimaryGeneratedColumn({ type: "integer", name: "id" })
   id: number;
 
-  @Column('character varying', { name: 'title', length: 255 })
+  @Column("character varying", { name: "title", length: 255 })
   title: string;
 
-  @Column('text', { name: 'description', nullable: true })
+  @Column("text", { name: "description", nullable: true })
   description: string | null;
 
-  @Column('integer', { name: 'total_marks', nullable: true })
+  @Column("integer", { name: "total_marks", nullable: true })
   totalMarks: number | null;
 
-  @Column('timestamp without time zone', { name: 'start_time' })
+  @Column("timestamp without time zone", { name: "start_time" })
   startTime: Date;
 
-  @Column('timestamp without time zone', { name: 'end_time' })
+  @Column("timestamp without time zone", { name: "end_time" })
   endTime: Date;
 
-  @Column('boolean', {
-    name: 'is_published',
+  @Column("boolean", {
+    name: "is_published",
     nullable: true,
-    default: () => 'false',
+    default: () => "false",
   })
   isPublished: boolean | null;
 
-  @Column('boolean', {
-    name: 'is_delete',
+  @Column("boolean", {
+    name: "is_delete",
     nullable: true,
-    default: () => 'false',
+    default: () => "false",
   })
   isDelete: boolean | null;
 
-  @Column('timestamp without time zone', {
-    name: 'created_at',
+  @Column("timestamp without time zone", {
+    name: "created_at",
     nullable: true,
-    default: () => 'CURRENT_TIMESTAMP',
+    default: () => "CURRENT_TIMESTAMP",
   })
   createdAt: Date | null;
 
@@ -71,18 +71,18 @@ export class Quizzes {
   quizQuestions: QuizQuestions[];
 
   @ManyToOne(() => Courses, (courses) => courses.quizzes, {
-    onDelete: 'CASCADE',
+    onDelete: "CASCADE",
   })
-  @JoinColumn([{ name: 'course_id', referencedColumnName: 'id' }])
+  @JoinColumn([{ name: "course_id", referencedColumnName: "id" }])
   course: Courses;
 
-  @ManyToOne(() => Users, (users) => users.quizzes, { onDelete: 'CASCADE' })
-  @JoinColumn([{ name: 'created_by', referencedColumnName: 'id' }])
+  @ManyToOne(() => Users, (users) => users.quizzes, { onDelete: "CASCADE" })
+  @JoinColumn([{ name: "created_by", referencedColumnName: "id" }])
   createdBy: Users;
 
   @ManyToOne(() => Sections, (sections) => sections.quizzes, {
-    onDelete: 'CASCADE',
+    onDelete: "CASCADE",
   })
-  @JoinColumn([{ name: 'section_id', referencedColumnName: 'id' }])
+  @JoinColumn([{ name: "section_id", referencedColumnName: "id" }])
   section: Sections;
 }

@@ -10,6 +10,9 @@ import { Quizzes } from 'src/Entities/entities/Quizzes';
 import { QuizQuestions } from 'src/Entities/entities/QuizQuestions';
 import { QuizQuestionOptions } from 'src/Entities/entities/QuizQuestionOptions';
 import { UpdateQuizDto } from './dto/update_quiz.dto';
+import { SubmitQuizDto } from './dto/submit_quiz.dto';
+import { QuizAttempts } from 'src/Entities/entities/QuizAttempts';
+import { QuizStdAnswers } from 'src/Entities/entities/QuizStdAnswers';
 
 @Injectable()
 export class QuizService {
@@ -213,5 +216,50 @@ export class QuizService {
     };
 
     return response;
+  }
+
+  async submitQuiz(userId: number, submitDto: SubmitQuizDto) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Create Quiz Attempt
+      const attempt = queryRunner.manager.create(QuizAttempts, {
+        quiz: { id: submitDto.quiz_id },
+        student: { id: userId },
+        submittedAt: new Date(),
+        totalMarks: 0,
+      });
+      const savedAttempt = await queryRunner.manager.save(attempt);
+
+      // 2. Save each answer
+      const answersToSave = submitDto.answers.map((ans) => {
+        return queryRunner.manager.create(QuizStdAnswers, {
+          attempt: { id: savedAttempt.id },
+          question: { id: ans.question_id },
+          selectedOptionIds: ans.selected_option_ids || [],
+          textAnswer: ans.text_answer || null,
+          isCorrect: null,
+          marksObtained: 0,
+        });
+      });
+
+      await queryRunner.manager.save(answersToSave);
+
+      await queryRunner.commitTransaction();
+      return {
+        success: true,
+        message: 'Quiz submitted successfully!',
+        attemptId: savedAttempt.id,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw new InternalServerErrorException(
+        'Submission failed: ' + err.message,
+      );
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

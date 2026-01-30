@@ -17,7 +17,7 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('Podium Backend API')
-    .setDescription('API documentation for Podium Backend - Course Management System')
+    .setDescription('API documentation for Podium Backend - Learning Management System')
     .setVersion('1.0')
     .addBearerAuth(
       {

@@ -151,7 +151,6 @@ export class ResourcesService {
         'course',
         'section',
         'section.course',
-        'section.parentSection',
       ],
     });
 
@@ -221,6 +220,7 @@ export class ResourcesService {
   }
 
   async createResourceBySection(
+    courseId: number,
     sectionId: number,
     dto: CreateResourceDto,
     file: Express.Multer.File | undefined,
@@ -281,8 +281,10 @@ export class ResourcesService {
       isPreview: dto.isPreview ?? false,
       isActive: dto.isActive ?? true,
       sectionId,
+      course: { id: courseId },
       createdBy: userId,
       createdAt: new Date(),
+      courseId
     });
 
     const savedResource = await this.resourceRepository.save(resource);
