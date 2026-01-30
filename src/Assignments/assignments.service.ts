@@ -389,6 +389,15 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment not found');
     }
 
+    let studentSubmission: {
+      id: number;
+      submissionFiles: string[];
+      status: string | null;
+      submittedAt: Date | null;
+      marksObtained: number | null;
+      comments: string | null;
+    } | null = null;
+    
     if (roleId === 3) {
       const enrollment = await this.enrollmentRepository.findOne({
         where: {
@@ -401,6 +410,26 @@ export class AssignmentsService {
         throw new ForbiddenException(
           'You do not have permission to view this assignment',
         );
+      }
+
+      // Fetch student's submission for this assignment
+      const submission = await this.assignmentSubmissionRepository.findOne({
+        where: {
+          assignment: { id: assignmentId },
+          student: { id: userId },
+        },
+      });
+
+      if (submission) {
+        const submissionFiles = parseSubmissionFiles(submission.submissionFile);
+        studentSubmission = {
+          id: submission.id,
+          submissionFiles: submissionFiles,
+          status: submission.status,
+          submittedAt: submission.submittedAt,
+          marksObtained: submission.marksObtained,
+          comments: submission.comments,
+        };
       }
     } else if (roleId === 2) {
       const isCreator = assignment.createdBy.id === userId;
@@ -450,6 +479,7 @@ export class AssignmentsService {
         lastName: assignment.createdBy.lastName,
         email: assignment.createdBy.email,
       },
+      submission: studentSubmission || undefined,
     };
 
     return response;
