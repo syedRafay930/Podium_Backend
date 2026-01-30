@@ -13,6 +13,7 @@ import { UpdateQuizDto } from './dto/update_quiz.dto';
 import { SubmitQuizDto } from './dto/submit_quiz.dto';
 import { QuizAttempts } from 'src/Entities/entities/QuizAttempts';
 import { QuizStdAnswers } from 'src/Entities/entities/QuizStdAnswers';
+import { GradeQuizDto } from './dto/graded_quiz.dto';
 
 @Injectable()
 export class QuizService {
@@ -229,7 +230,7 @@ export class QuizService {
         quiz: { id: submitDto.quiz_id },
         student: { id: userId },
         submittedAt: new Date(),
-        totalMarks: 0,
+        totalMarks: null,
       });
       const savedAttempt = await queryRunner.manager.save(attempt);
 
@@ -261,5 +262,154 @@ export class QuizService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async gradeStudentQuiz(
+    attemptId: number,
+    teacherId: number,
+    gradeDto: GradeQuizDto,
+  ) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      let totalMarksCalculated = 0;
+
+      // 1. Update individual answers
+      for (const qGrade of gradeDto.questions) {
+        await queryRunner.manager.update(
+          QuizStdAnswers,
+          { attempt: { id: attemptId }, question: { id: qGrade.question_id } },
+          {
+            marksObtained: qGrade.marks_obtained,
+            isCorrect: qGrade.is_correct,
+          },
+        );
+        totalMarksCalculated += qGrade.marks_obtained;
+      }
+
+      // 2. Update the main attempt record
+      await queryRunner.manager.update(QuizAttempts, attemptId, {
+        totalMarks: totalMarksCalculated,
+        comments: gradeDto.comments,
+        gradedBy: { id: teacherId },
+        gradedAt: new Date(),
+      });
+
+      await queryRunner.commitTransaction();
+      return {
+        success: true,
+        message: 'Quiz graded successfully',
+        finalMarks: totalMarksCalculated,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw new InternalServerErrorException('Grading failed: ' + err.message);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async getAllAttemptsByQuizId(quizId: number) {
+    const attempts = await this.dataSource.getRepository(QuizAttempts).find({
+      where: { quiz: { id: quizId } },
+      relations: ['student', 'quiz'],
+      order: { submittedAt: 'DESC' },
+    });
+
+    return attempts.map((attempt) => ({
+      id: attempt.id,
+      studentName: `${attempt.student.firstName} ${attempt.student.lastName}`,
+      title: attempt.quiz.title,
+      submittedAt: attempt.submittedAt,
+      totalMarks: attempt.totalMarks,
+      isGraded:
+        (attempt.totalMarks !== null && attempt.totalMarks >= 0) ||
+        attempt.comments !== null,
+    }));
+  }
+
+  async getAttemptById(attemptId: number) {
+    const attempt = await this.dataSource.getRepository(QuizAttempts).findOne({
+      where: { id: attemptId },
+      relations: [
+        'student',
+        'quiz',
+        'quizStdAnswers',
+        'quizStdAnswers.question',
+        'quizStdAnswers.question.quizQuestionOptions',
+      ],
+    });
+
+    if (!attempt) {
+      throw new NotFoundException('Attempt not found');
+    }
+
+    // Mapping for Teacher Review
+    return {
+      attemptId: attempt.id,
+      studentName: `${attempt.student.firstName} ${attempt.student.lastName}`,
+      quizTitle: attempt.quiz.title,
+      submittedAt: attempt.submittedAt,
+      totalMarksObtained: attempt.totalMarks,
+      comments: attempt.comments,
+      answers: attempt.quizStdAnswers.map((ans) => ({
+        questionId: ans.question.id,
+        questionText: ans.question.questionText,
+        questionType: ans.question.questionType,
+        marksAllocated: ans.question.marks,
+        studentAnswerText: ans.textAnswer,
+        studentSelectedOptions: ans.selectedOptionIds,
+        allOptions: ans.question.quizQuestionOptions.map((opt) => ({
+          id: opt.id,
+          text: opt.optionText,
+          isCorrect: opt.isCorrect,
+        })),
+        marksObtained: ans.marksObtained,
+        isCorrect: ans.isCorrect,
+      })),
+    };
+  }
+
+  async getStudentResult(attemptId: number, userId: number) {
+    const attempt = await this.dataSource.getRepository(QuizAttempts).findOne({
+      where: { id: attemptId, student: { id: userId } },
+      relations: [
+        'quiz',
+        'quizStdAnswers',
+        'quizStdAnswers.question',
+        'quizStdAnswers.question.quizQuestionOptions',
+      ],
+    });
+
+    if (!attempt) {
+      throw new NotFoundException('Result not found');
+    }
+
+    if (attempt.totalMarks === null) {
+      return { message: 'Your quiz is currently being graded by the teacher.' };
+    }
+
+    return {
+      quizTitle: attempt.quiz.title,
+      totalMarksObtained: attempt.totalMarks,
+      quizTotalMarks: attempt.quiz.totalMarks,
+      teacherComments: attempt.comments,
+      submittedAt: attempt.submittedAt,
+      questions: attempt.quizStdAnswers.map((ans) => ({
+        questionText: ans.question.questionText,
+        marksAllocated: ans.question.marks,
+        marksObtained: ans.marksObtained,
+        status: ans.isCorrect ? 'Correct' : 'Incorrect',
+        yourAnswer:
+          ans.question.questionType === 'SHORT'
+            ? ans.textAnswer
+            : ans.selectedOptionIds,
+        correctAnswers: ans.question.quizQuestionOptions
+          .filter((opt) => opt.isCorrect)
+          .map((opt) => ({ id: opt.id, text: opt.optionText })),
+      })),
+    };
   }
 }
