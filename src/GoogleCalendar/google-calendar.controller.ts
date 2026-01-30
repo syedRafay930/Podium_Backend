@@ -32,7 +32,7 @@ import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Google Calendar')
 @Controller('google-calendar')
-@UseGuards(JwtBlacklistGuard)
+// @UseGuards(JwtBlacklistGuard)
 @ApiBearerAuth('JWT-auth')
 export class GoogleCalendarController {
   constructor(
@@ -43,6 +43,7 @@ export class GoogleCalendarController {
   /**
    * Initiate Google OAuth flow
    */
+  @UseGuards(JwtBlacklistGuard)
   @Get('connect')
   @ApiOperation({
     summary: 'Connect Google Calendar',
@@ -128,6 +129,7 @@ export class GoogleCalendarController {
   /**
    * Get connection status
    */
+  @UseGuards(JwtBlacklistGuard)
   @Get('status')
   @ApiOperation({
     summary: 'Get Connection Status',
@@ -160,6 +162,7 @@ export class GoogleCalendarController {
   /**
    * Disconnect Google Calendar
    */
+  @UseGuards(JwtBlacklistGuard)
   @Post('disconnect')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
