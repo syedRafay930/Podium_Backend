@@ -151,14 +151,22 @@ export class EnrollmentsService {
       .orderBy('enrollment.createdAt', 'DESC')
       .getRawAndEntities();
 
-    // Map the results to include avgRating with each course
-    return enrollments.entities.map((enrollment, index) => ({
-      ...enrollment,
-      course: {
-        ...enrollment.course,
-        avgRating: enrollments.raw[index]?.course_avgRating || 0,
-      },
-    }));
+    // Map the results to include avgRating with each course and exclude sensitive fields
+    return enrollments.entities.map((enrollment, index) => {
+      let teacherWithoutPassword: any = null;
+      if (enrollment.course.teacher) {
+        const { hashedPassword, ...rest } = enrollment.course.teacher;
+        teacherWithoutPassword = rest;
+      }
+      return {
+        ...enrollment,
+        course: {
+          ...enrollment.course,
+          teacher: teacherWithoutPassword,
+          avgRating: enrollments.raw[index]?.course_avgRating || 0,
+        },
+      };
+    });
   }
 
   async getAllEnrollments(): Promise<Enrollment[]> {

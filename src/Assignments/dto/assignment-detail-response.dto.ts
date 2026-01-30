@@ -103,5 +103,27 @@ export class AssignmentDetailResponseDto {
 
   @ApiProperty({ description: 'Creator information', type: UserDetailDto })
   createdBy: UserDetailDto;
+
+  @ApiProperty({
+    description: 'Student submission (only included for students viewing their own assignment)',
+    type: Object,
+    required: false,
+    example: {
+      id: 1,
+      submissionFiles: ['https://example.com/submission.pdf'],
+      status: 'submitted',
+      submittedAt: '2024-01-15T10:30:00Z',
+      marksObtained: null,
+      comments: null,
+    },
+  })
+  submission?: {
+    id: number;
+    submissionFiles: string[];
+    status: string | null;
+    submittedAt: Date | null;
+    marksObtained: number | null;
+    comments: string | null;
+  };
 }
 

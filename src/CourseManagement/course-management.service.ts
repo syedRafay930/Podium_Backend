@@ -67,9 +67,9 @@ export class CourseManagementService {
       throw new ForbiddenException('You can only manage courses you teach');
     }
 
-    if (roleId === 3) {
-      throw new ForbiddenException('Students cannot manage courses');
-    }
+    // if (roleId === 3) {
+    //   throw new ForbiddenException('Students cannot manage courses');
+    // }
 
     return course;
   }
