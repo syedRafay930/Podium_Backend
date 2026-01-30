@@ -227,6 +227,7 @@ export class CourseManagementService {
           this.lectureRepository
             .createQueryBuilder('lecture')
             .where('lecture.section_id = :sectionId', { sectionId: section.id })
+            .andWhere('lecture.isDelete = false')
             .leftJoinAndSelect('lecture.createdBy', 'createdBy')
             .orderBy('lecture.lectureOrder', 'ASC')
             .addOrderBy('lecture.createdAt', 'ASC')
