@@ -21,7 +21,7 @@ import { QuizModule } from './Quiz/quiz.module';
     ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: process.env.NODE_ENV === 'production' ? undefined : '.env',
     }),
 
     TypeOrmModule.forRoot({
@@ -37,10 +37,20 @@ import { QuizModule } from './Quiz/quiz.module';
     RedisModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (config: ConfigService) => ({
-        type: 'single',
-        url: config.get<string>('REDIS_URL') || 'redis://localhost:6380',
-      }),
+      useFactory: (config: ConfigService) => {
+        const url = config.get<string>('REDIS_URL');
+
+        return {
+          type: 'single',
+          url: url,
+          options: {
+            tls: url?.includes('rediss://')
+              ? { rejectUnauthorized: false }
+              : undefined,
+            retryStrategy: (times) => Math.min(times * 50, 2000),
+          },
+        };
+      },
     }),
 
     AuthModule,
