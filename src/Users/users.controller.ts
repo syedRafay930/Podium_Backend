@@ -84,7 +84,19 @@ export class UsersController {
     @Param('userId', ParseIntPipe) userId: number,
     @Body() editStudentDto: EditStudentDto,
   ) {
-    return this.usersService.updateUser(userId, editStudentDto, req.user.id);
+    if (req.user.role_id === 1) {
+      return this.usersService.updateUser(
+        userId,
+        editStudentDto,
+        req.user.id,
+      );
+    } else {
+      return this.usersService.updateSelf(
+        userId,
+        editStudentDto,
+        req.user.id,
+      );
+    }
   }
 
   // ==================== STUDENT ENDPOINTS ====================

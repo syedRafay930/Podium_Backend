@@ -188,6 +188,9 @@ export class QuizService {
       title: quiz.title,
       description: quiz.description,
       total_marks: quiz.totalMarks,
+      start_time: quiz.startTime,
+      end_time: quiz.endTime,
+      is_Published: quiz.isPublished,
       questions: quiz.quizQuestions.map((q) => {
         const question: any = {
           id: q.id,

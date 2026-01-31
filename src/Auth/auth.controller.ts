@@ -8,6 +8,7 @@ import {
   Patch,
   Request,
   HttpCode,
+  BadRequestException,
   HttpStatus,
 } from '@nestjs/common';
 import {
@@ -82,12 +83,12 @@ export class AuthController {
     const { email, password } = loginDto;
 
     if (!email || !password) {
-      throw new Error('Email and password are required');
+      throw new BadRequestException('Email or password are required');
     }
 
     const user = await this.authService.validateUserByEmail(email, password);
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new BadRequestException('Invalid credentials');
     }
     const token = await this.authService.generateJwtToken(user);
     const sidebar = await this.rbacService.getModulesByRole(user.role.id);

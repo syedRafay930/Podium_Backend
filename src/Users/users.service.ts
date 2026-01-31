@@ -3,6 +3,7 @@ import {
   ConflictException,
   UnauthorizedException,
   NotFoundException,
+  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -77,7 +78,7 @@ export class UsersService {
   async createStudent(
     createStudentDto: CreateStudentDto,
     adminId?: number,
-  ): Promise<Users> {
+  ): Promise<any> {
     // Check if email already exists
     const existingStudent = await this.usersRepository.findOne({
       where: { email: createStudentDto.email },
@@ -109,7 +110,7 @@ export class UsersService {
     const student = this.usersRepository.create({
       firstName: createStudentDto.firstName,
       lastName: createStudentDto.lastName,
-      email: createStudentDto.email,
+      email: createStudentDto.email.trim().toLowerCase(),
       hashedPassword,
       contactNumber: createStudentDto.contactNumber || null,
       isActive: true,
@@ -139,7 +140,16 @@ export class UsersService {
       console.error('Failed to send student onboarding email:', error);
     }
 
-    return savedStudent;
+    return {
+      id: savedStudent.id,
+      firstName: savedStudent.firstName,
+      lastName: savedStudent.lastName,
+      email: savedStudent.email,
+      contactNumber: savedStudent.contactNumber,
+      role: savedStudent.role?.roleName || 'Student',
+      isActive: savedStudent.isActive,
+      createdAt: savedStudent.createdAt,
+    };
   }
 
   async getAllStudents(page: number = 1, limit: number = 10): Promise<any> {
@@ -217,6 +227,47 @@ export class UsersService {
     user.updatedAt = new Date();
     user.updatedBy = adminId as any;
     return this.usersRepository.save(user);
+  }
+
+  async updateSelf(
+    targetUserId: number,
+    editDto: EditStudentDto,
+    requesterId: number,
+  ): Promise<Partial<Users>> {
+    if (!editDto || Object.keys(editDto).length === 0) {
+      throw new BadRequestException('Request body cannot be empty');
+    }
+
+    if (targetUserId !== requesterId) {
+      throw new ForbiddenException('You can only update your own information');
+    }
+
+    const user = await this.getUserById(targetUserId);
+
+    // Only safe fields allowed
+    if (editDto.firstName) user.firstName = editDto.firstName;
+    if (editDto.lastName) user.lastName = editDto.lastName;
+    if (editDto.contactNumber !== undefined)
+      user.contactNumber = editDto.contactNumber;
+
+    if (editDto.email && editDto.email !== user.email) {
+      const existingUser = await this.usersRepository.findOne({
+        where: { email: editDto.email },
+      });
+      if (existingUser) throw new ConflictException('Email already exists');
+      user.email = editDto.email.toLowerCase().trim();
+    }
+
+    if (editDto.password) {
+      user.hashedPassword = await bcrypt.hash(editDto.password, 12);
+    }
+
+    user.updatedAt = new Date();
+
+    const updatedUser = await this.usersRepository.save(user);
+
+    const { hashedPassword, isActive, role, createdBy, ...safeUser } = updatedUser;
+    return safeUser;
   }
 
   async deleteStudent(

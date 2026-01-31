@@ -17,10 +17,12 @@ export class AuthService {
   ) {}
 
   async validateUserByEmail(email: string, login_password: string) {
-    const user = await this.usersService.findByEmail(email);
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.usersService.findByEmail(normalizedEmail);
 
     if (!user) {
-      throw new UnauthorizedException('Incorrect email');
+      throw new UnauthorizedException('Incorrect email or password');
     }
 
     if (!user.isActive) {
@@ -43,7 +45,7 @@ export class AuthService {
 
     if (!isPasswordMatch) {
       await this.handleFailedLogin(email);
-      throw new UnauthorizedException('Invalid password');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     await this.resetLoginFailures(email);
@@ -68,7 +70,8 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
-    const user = await this.usersService.findByEmail(email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.usersService.findByEmail(normalizedEmail);
     if (!user) throw new UnauthorizedException('User not found');
 
     const token = this.jwtService.sign(

@@ -5,6 +5,7 @@ import {
   IsString,
   MinLength,
   MaxLength,
+  Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -14,9 +15,14 @@ export class CreateStudentDto {
     example: 'Ahmed',
     type: String,
   })
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'First name is required' })
   @IsString()
-  @MaxLength(255)
+  @MinLength(3, { message: 'First name must be at least 3 characters long' })
+  @MaxLength(50, { message: 'First name can be at most 50 characters long' })
+  @Matches(/^[A-Za-z\s'-]+$/, {
+    message:
+      'First name can only contain letters, spaces, hyphens, and apostrophes',
+  })
   firstName: string;
 
   @ApiProperty({
@@ -24,9 +30,14 @@ export class CreateStudentDto {
     example: 'Khan',
     type: String,
   })
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Last name is required' })
   @IsString()
-  @MaxLength(255)
+  @MinLength(3, { message: 'Last name must be at least 3 characters long' })
+  @MaxLength(50, { message: 'Last name can be at most 50 characters long' })
+  @Matches(/^[A-Za-z\s'-]+$/, {
+    message:
+      'Last name can only contain letters, spaces, hyphens, and apostrophes',
+  })
   lastName: string;
 
   @ApiProperty({
@@ -34,8 +45,13 @@ export class CreateStudentDto {
     example: 'ahmed.khan@example.com',
     type: String,
   })
-  @IsNotEmpty()
-  @IsEmail()
+  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail(
+    {},
+    { message: 'Please enter a valid email address (e.g. user@example.com)' },
+  )
+  @MinLength(5, { message: 'Email must be at least 5 characters long' })
+  @MaxLength(100, { message: 'Email can be at most 100 characters long' })
   email: string;
 
   @ApiProperty({
@@ -46,7 +62,10 @@ export class CreateStudentDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(255)
+  @Matches(/^\+?[0-9]{11,13}$/, {
+    message:
+      'Contact number must be digits only and can start with + for country code (e.g., +923001234567)',
+  })
   contactNumber?: string;
 
   @ApiProperty({
@@ -60,5 +79,4 @@ export class CreateStudentDto {
   @IsString()
   @MinLength(6)
   password?: string;
-
 }
