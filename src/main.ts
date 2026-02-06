@@ -6,13 +6,13 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 1. CORS Update: Deployment ke baad aapka frontend URL bhi yahan aayega
   app.enableCors({
     origin: [
       'http://localhost:5173',
       'http://localhost:3000',
       'http://localhost:3006',
-      /\.onrender\.com$/, // Yeh Render ke saare subdomains allow kar dega
+      'https://podium-professional.vercel.app/',
+      /\.onrender\.com$/, 
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
