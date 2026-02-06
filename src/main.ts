@@ -11,11 +11,11 @@ async function bootstrap() {
       'http://localhost:5173',
       'http://localhost:3000',
       'http://localhost:3006',
-      'https://podium-professional.vercel.app/',
+      'https://podium-professional.vercel.app',
       /\.onrender\.com$/, 
     ],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH','OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
