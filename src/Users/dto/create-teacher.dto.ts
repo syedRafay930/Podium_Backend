@@ -53,24 +53,17 @@ export class CreateTeacherDto {
   email: string;
 
   @ApiProperty({
-    description: 'Teacher password (min 6 characters)',
-    example: 'SecurePassword123',
-    type: String,
-  })
-  @IsNotEmpty()
-  @IsString()
-  @MinLength(6)
-  password: string;
-
-  @ApiProperty({
     description: 'Teacher contact number',
-    example: '+923009876543',
+    example: '+923001234567',
     type: String,
     required: false,
   })
   @IsOptional()
   @IsString()
-  @MaxLength(255)
+  @Matches(/^\+?[0-9]{11,13}$/, {
+    message:
+      'Contact number must be digits only and can start with + for country code (e.g., +923001234567)',
+  })
   contactNumber?: string;
 
   @ApiProperty({
