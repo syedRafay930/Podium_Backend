@@ -1,0 +1,194 @@
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  OneToOne,
+  PrimaryGeneratedColumn,
+} from "typeorm";
+import { Assignment } from "./Assignment";
+import { AssignmentSubmission } from "./AssignmentSubmission";
+import { Attendance } from "./Attendance";
+import { AttendanceDetails } from "./AttendanceDetails";
+import { CourseCategory } from "./CourseCategory";
+import { CourseRating } from "./CourseRating";
+import { Courses } from "./Courses";
+import { Enrollment } from "./Enrollment";
+import { GoogleCredentials } from "./GoogleCredentials";
+import { Lectures } from "./Lectures";
+import { QuizAttempts } from "./QuizAttempts";
+import { Quizzes } from "./Quizzes";
+import { Resources } from "./Resources";
+import { Sections } from "./Sections";
+import { UserRole } from "./UserRole";
+
+@Index("users_email_key", ["email"], { unique: true })
+@Index("users_pkey1", ["id"], { unique: true })
+@Entity("users", { schema: "public" })
+export class Users {
+  @PrimaryGeneratedColumn({ type: "integer", name: "id" })
+  id: number;
+
+  @Column("character varying", { name: "first_name", length: 255 })
+  firstName: string;
+
+  @Column("character varying", { name: "last_name", length: 255 })
+  lastName: string;
+
+  @Column("character varying", { name: "email", unique: true, length: 255 })
+  email: string;
+
+  @Column("character varying", {
+    name: "hashed_password",
+    nullable: true,
+    length: 255,
+  })
+  hashedPassword: string | null;
+
+  @Column("boolean", {
+    name: "is_active",
+    nullable: true,
+    default: () => "true",
+  })
+  isActive: boolean | null;
+
+  @Column("boolean", {
+    name: "is_delete",
+    nullable: true,
+    default: () => "false",
+  })
+  isDelete: boolean | null;
+
+  @Column("timestamp without time zone", {
+    name: "created_at",
+    nullable: true,
+    default: () => "now()",
+  })
+  createdAt: Date | null;
+
+  @Column("timestamp without time zone", { name: "updated_at", nullable: true })
+  updatedAt: Date | null;
+
+  @Column("timestamp without time zone", { name: "deleted_at", nullable: true })
+  deletedAt: Date | null;
+
+  @Column("character varying", {
+    name: "contact_number",
+    nullable: true,
+    length: 255,
+  })
+  contactNumber: string | null;
+
+  @OneToMany(() => Assignment, (assignment) => assignment.createdBy)
+  assignments: Assignment[];
+
+  @OneToMany(
+    () => AssignmentSubmission,
+    (assignmentSubmission) => assignmentSubmission.gradedBy
+  )
+  assignmentSubmissions: AssignmentSubmission[];
+
+  @OneToMany(
+    () => AssignmentSubmission,
+    (assignmentSubmission) => assignmentSubmission.student
+  )
+  assignmentSubmissions2: AssignmentSubmission[];
+
+  @OneToMany(() => Attendance, (attendance) => attendance.teacher)
+  attendances: Attendance[];
+
+  @OneToMany(() => Attendance, (attendance) => attendance.updatedBy)
+  attendances2: Attendance[];
+
+  @OneToMany(
+    () => AttendanceDetails,
+    (attendanceDetails) => attendanceDetails.student
+  )
+  attendanceDetails: AttendanceDetails[];
+
+  @OneToMany(() => CourseCategory, (courseCategory) => courseCategory.createdBy)
+  courseCategories: CourseCategory[];
+
+  @OneToMany(() => CourseCategory, (courseCategory) => courseCategory.updatedBy)
+  courseCategories2: CourseCategory[];
+
+  @OneToMany(() => CourseRating, (courseRating) => courseRating.student)
+  courseRatings: CourseRating[];
+
+  @OneToMany(() => Courses, (courses) => courses.createdBy)
+  courses: Courses[];
+
+  @OneToMany(() => Courses, (courses) => courses.teacher)
+  courses2: Courses[];
+
+  @OneToMany(() => Courses, (courses) => courses.updatedBy)
+  courses3: Courses[];
+
+  @OneToMany(() => Enrollment, (enrollment) => enrollment.enrolledBy)
+  enrollments: Enrollment[];
+
+  @OneToMany(() => Enrollment, (enrollment) => enrollment.student)
+  enrollments2: Enrollment[];
+
+  @OneToOne(
+    () => GoogleCredentials,
+    (googleCredentials) => googleCredentials.user
+  )
+  googleCredentials: GoogleCredentials;
+
+  @OneToMany(() => Lectures, (lectures) => lectures.createdBy)
+  lectures: Lectures[];
+
+  @OneToMany(() => Lectures, (lectures) => lectures.updatedBy)
+  lectures2: Lectures[];
+
+  @OneToMany(() => QuizAttempts, (quizAttempts) => quizAttempts.gradedBy)
+  quizAttempts: QuizAttempts[];
+
+  @OneToMany(() => QuizAttempts, (quizAttempts) => quizAttempts.student)
+  quizAttempts2: QuizAttempts[];
+
+  @OneToMany(() => Quizzes, (quizzes) => quizzes.createdBy)
+  quizzes: Quizzes[];
+
+  @OneToMany(() => Resources, (resources) => resources.createdBy2)
+  resources: Resources[];
+
+  @OneToMany(() => Resources, (resources) => resources.updatedBy2)
+  resources2: Resources[];
+
+  @OneToMany(() => Sections, (sections) => sections.createdBy2)
+  sections: Sections[];
+
+  @OneToMany(() => Sections, (sections) => sections.updatedBy2)
+  sections2: Sections[];
+
+  @ManyToOne(() => Users, (users) => users.users, { onDelete: "SET NULL" })
+  @JoinColumn([{ name: "created_by", referencedColumnName: "id" }])
+  createdBy: Users;
+
+  @OneToMany(() => Users, (users) => users.createdBy)
+  users: Users[];
+
+  @ManyToOne(() => Users, (users) => users.users2, { onDelete: "SET NULL" })
+  @JoinColumn([{ name: "deleted_by", referencedColumnName: "id" }])
+  deletedBy: Users;
+
+  @OneToMany(() => Users, (users) => users.deletedBy)
+  users2: Users[];
+
+  @ManyToOne(() => UserRole, (userRole) => userRole.users, {
+    onDelete: "RESTRICT",
+  })
+  @JoinColumn([{ name: "role_id", referencedColumnName: "id" }])
+  role: UserRole;
+
+  @ManyToOne(() => Users, (users) => users.users3, { onDelete: "SET NULL" })
+  @JoinColumn([{ name: "updated_by", referencedColumnName: "id" }])
+  updatedBy: Users;
+
+  @OneToMany(() => Users, (users) => users.updatedBy)
+  users3: Users[];
+}
