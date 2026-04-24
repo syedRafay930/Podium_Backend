@@ -16,8 +16,7 @@ import { ResourceDetailResponseDto } from './dto/resource-detail-response.dto';
 import { CourseResourcesResponseDto } from './dto/course-resources-response.dto';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
-import { uploadDocumentToCloudinary } from 'src/Cloudinary/cloudinary.helper';
-import { v2 as cloudinary } from 'cloudinary';
+import { S3Helper } from 'src/S3/s3.helper';
 
 @Injectable()
 export class ResourcesService {
@@ -30,6 +29,7 @@ export class ResourcesService {
     private readonly sectionRepository: Repository<Sections>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    private readonly s3Helper: S3Helper,
   ) {}
 
   private mapResourceToDto(resource: Resources): ResourceListResponseDto {
@@ -101,20 +101,6 @@ export class ResourcesService {
 
     // Return as-is if already specified, otherwise default to 'document'
     return 'document';
-  }
-
-  private extractPublicIdFromUrl(url: string): string | null {
-    try {
-      // Cloudinary URL format: https://res.cloudinary.com/{cloud_name}/{resource_type}/upload/{version}/{public_id}.{format}
-      const matches = url.match(/\/upload\/[^/]+\/(.+)$/);
-      if (matches && matches[1]) {
-        // Remove file extension
-        return matches[1].replace(/\.[^/.]+$/, '');
-      }
-      return null;
-    } catch {
-      return null;
-    }
   }
 
   async validateCourseAccess(
@@ -191,8 +177,8 @@ export class ResourcesService {
         );
       }
 
-      const uploadResult = await uploadDocumentToCloudinary(file);
-      fileUrl = uploadResult.secure_url;
+      const uploadResult = await this.s3Helper.uploadFile(file, 'resources/files');
+      fileUrl = uploadResult.url;
       fileName = file.originalname;
       fileSize = file.size;
       mimeType = file.mimetype;
@@ -261,8 +247,8 @@ export class ResourcesService {
         );
       }
 
-      const uploadResult = await uploadDocumentToCloudinary(file);
-      fileUrl = uploadResult.secure_url;
+      const uploadResult = await this.s3Helper.uploadFile(file, 'resources/files');
+      fileUrl = uploadResult.url;
       fileName = file.originalname;
       fileSize = file.size;
       mimeType = file.mimetype;
@@ -372,21 +358,19 @@ export class ResourcesService {
         );
       }
 
-      // Delete old file from Cloudinary
       if (resource.fileUrl) {
         try {
-          const publicId = this.extractPublicIdFromUrl(resource.fileUrl);
-          if (publicId) {
-            await cloudinary.uploader.destroy(publicId);
+          const oldKey = this.s3Helper.extractKeyFromUrl(resource.fileUrl);
+          if (oldKey) {
+            await this.s3Helper.deleteFile(oldKey);
           }
         } catch (error) {
-          console.error(`Failed to delete old Cloudinary file: ${error}`);
+          console.error(`Failed to delete old S3 file: ${error}`);
         }
       }
 
-      // Upload new file
-      const uploadResult = await uploadDocumentToCloudinary(file);
-      resource.fileUrl = uploadResult.secure_url;
+      const uploadResult = await this.s3Helper.uploadFile(file, 'resources/files');
+      resource.fileUrl = uploadResult.url;
       resource.fileName = file.originalname;
       resource.fileSize = file.size;
       resource.mimeType = file.mimetype;
@@ -445,15 +429,14 @@ export class ResourcesService {
     const courseId = resource.section.courseId;
     await this.validateCourseAccess(courseId, userId, roleId);
 
-    // Delete file from Cloudinary
     if (resource.fileUrl) {
       try {
-        const publicId = this.extractPublicIdFromUrl(resource.fileUrl);
-        if (publicId) {
-          await cloudinary.uploader.destroy(publicId);
+        const key = this.s3Helper.extractKeyFromUrl(resource.fileUrl);
+        if (key) {
+          await this.s3Helper.deleteFile(key);
         }
       } catch (error) {
-        console.error(`Failed to delete Cloudinary file: ${error}`);
+        console.error(`Failed to delete S3 file: ${error}`);
       }
     }
 

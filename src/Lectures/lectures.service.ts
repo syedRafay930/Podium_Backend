@@ -15,7 +15,7 @@ import { CreateRecordedLectureDto } from './dto/create-recorded-lecture.dto';
 import { CreateLiveLectureDto } from './dto/create-live-lecture.dto';
 import { UpdateLectureDto } from './dto/update-lecture.dto';
 import { LectureResponseDto } from './dto/lecture-response.dto';
-import { uploadDocumentToCloudinary } from 'src/Cloudinary/cloudinary.helper';
+import { S3Helper } from 'src/S3/s3.helper';
 import { AttendanceDetails } from 'src/Entities/entities/AttendanceDetails';
 import { Attendance } from 'src/Entities/entities/Attendance';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
@@ -39,6 +39,7 @@ export class LecturesService {
     private readonly enrollmentRepository: Repository<Enrollment>,
 
     private readonly googleCalendarService: GoogleCalendarService,
+    private readonly s3Helper: S3Helper,
   ) {}
 
   /**
@@ -106,11 +107,13 @@ export class LecturesService {
 
     let videoUrl: string | null = null;
 
-    // Upload video to Cloudinary if provided
     if (videoFile) {
       try {
-        const uploadResponse = await uploadDocumentToCloudinary(videoFile);
-        videoUrl = uploadResponse.secure_url || uploadResponse.url;
+        const uploadResponse = await this.s3Helper.uploadFile(
+          videoFile,
+          'lectures/videos',
+        );
+        videoUrl = uploadResponse.url;
       } catch (error) {
         throw new BadRequestException(
           `Failed to upload video: ${error.message}`,

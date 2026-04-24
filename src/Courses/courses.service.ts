@@ -13,7 +13,7 @@ import { AddCourseDto } from './dto/add_course.dto';
 import { DeepPartial } from 'typeorm';
 import { CourseRating } from 'src/Entities/entities/CourseRating';
 import { Lectures } from 'src/Entities/entities/Lectures';
-import { uploadToCloudinary } from 'src/Cloudinary/cloudinary.helper';
+import { S3Helper } from 'src/S3/s3.helper';
 import { EditCourseDto } from './dto/edit_course.dto';
 import { Assignment } from 'src/Entities/entities/Assignment';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
@@ -42,6 +42,7 @@ export class CourseService {
     private readonly enrollmentRepository: Repository<Enrollment>,
     private readonly mailService: MailService,
     private readonly redisService: RedisService,
+    private readonly s3Helper: S3Helper,
   ) {}
 
   async createCourse(courseDto: AddCourseDto, adminId: number, file) {
@@ -66,8 +67,8 @@ export class CourseService {
 
     let coverImgUrl: string | null = null;
     if (file) {
-      const uploadResult = await uploadToCloudinary(file);
-      coverImgUrl = uploadResult.secure_url;
+      const uploadResult = await this.s3Helper.uploadFile(file, 'courses/covers');
+      coverImgUrl = uploadResult.url;
     }
 
     const courseData: DeepPartial<Courses> = {
@@ -220,8 +221,8 @@ export class CourseService {
 
     // Update course image if file provided
     if (file) {
-      const uploadResult = await uploadToCloudinary(file);
-      course.coverImg = uploadResult.secure_url;
+      const uploadResult = await this.s3Helper.uploadFile(file, 'courses/covers');
+      course.coverImg = uploadResult.url;
     }
 
     // Update other fields

@@ -28,7 +28,7 @@ import {
   sanitizeFilename,
   parseSubmissionFiles,
 } from './utils/file-validator.util';
-import { uploadDocumentToCloudinary } from 'src/Cloudinary/cloudinary.helper';
+import { S3Helper } from 'src/S3/s3.helper';
 import { SubmissionResponseDto } from './dto/submission-response.dto';
 import {
   PaginatedSubmissionsResponseDto,
@@ -51,6 +51,7 @@ export class AssignmentsService {
     private readonly usersRepository: Repository<Users>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    private readonly s3Helper: S3Helper,
   ) {}
 
   async getAssignments(
@@ -298,11 +299,14 @@ export class AssignmentsService {
 
     if (files && files.length > 0) {
       const materialPromises = files.map(async (file) => {
-        const uploadResult = await uploadDocumentToCloudinary(file);
+        const uploadResult = await this.s3Helper.uploadFile(
+          file,
+          'assignments/materials',
+        );
 
         const material = this.assignmentMaterialRepository.create({
           assignmentId: savedAssignment.id,
-          fileUrl: uploadResult.secure_url,
+          fileUrl: uploadResult.url,
           fileName: sanitizeFilename(file.originalname),
           fileSize: file.size,
           fileType: file.mimetype,
@@ -539,8 +543,11 @@ export class AssignmentsService {
 
     const fileUploadPromises = files.map(async (file) => {
       try {
-        const uploadResult = await uploadDocumentToCloudinary(file);
-        return uploadResult.secure_url;
+        const uploadResult = await this.s3Helper.uploadFile(
+          file,
+          'assignments/submissions',
+        );
+        return uploadResult.url;
       } catch (error) {
         throw new BadRequestException(
           `Failed to upload file: ${file.originalname}`,

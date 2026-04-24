@@ -7,13 +7,13 @@ import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { ResourcesController } from './resources.controller';
 import { ResourcesService } from './resources.service';
 import { AuthModule } from '../Auth/auth.module';
-import { CloudinaryModule } from 'src/Cloudinary/cloudinary.module';
+import { S3Module } from 'src/S3/s3.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Resources, Courses, Sections, Enrollment]),
     AuthModule,
-    CloudinaryModule,
+    S3Module,
   ],
   controllers: [ResourcesController],
   providers: [ResourcesService],

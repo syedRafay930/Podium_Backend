@@ -9,6 +9,7 @@ import { Courses } from 'src/Entities/entities/Courses';
 import { Users } from 'src/Entities/entities/Users';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { AuthModule } from 'src/Auth/auth.module';
+import { S3Module } from 'src/S3/s3.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AuthModule } from 'src/Auth/auth.module';
       AssignmentMaterial,
     ]),
     AuthModule,
+    S3Module,
   ],
   controllers: [AssignmentsController],
   providers: [AssignmentsService],

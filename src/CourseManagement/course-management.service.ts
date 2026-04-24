@@ -22,9 +22,7 @@ import { SectionResponseDto } from './dto/section-response.dto';
 import { SectionWithContentResponseDto } from './dto/section-with-content-response.dto';
 import { ResourceListResponseDto } from 'src/Resources/dto/resource-list-response.dto';
 //import { ResourcesService } from 'src/Resources/resources.service';
-import { uploadDocumentToCloudinary } from 'src/Cloudinary/cloudinary.helper';
-import { v2 as cloudinary } from 'cloudinary';
-
+import { S3Helper } from 'src/S3/s3.helper';
 
 @Injectable()
 export class CourseManagementService {
@@ -45,6 +43,7 @@ export class CourseManagementService {
     private readonly enrollmentRepository: Repository<Enrollment>,
     @InjectRepository(Quizzes)
     private readonly quizRepository: Repository<Quizzes>,
+    private readonly s3Helper: S3Helper,
     //private readonly resourcesService: ResourcesService,
   ) {}
 
@@ -328,25 +327,23 @@ export class CourseManagementService {
       courseId,
     );
 
-    // Delete assignments and their Cloudinary files if requested
     if (deleteAssignments) {
       const assignments = await this.assignmentRepository.find({
         where: { sectionId },
         relations: ['assignmentMaterials'],
       });
 
-      // Collect all materials with valid fileUrls for parallel deletion
       const materialDeletions: Promise<void>[] = [];
       for (const assignment of assignments) {
         if (assignment.assignmentMaterials && assignment.assignmentMaterials.length > 0) {
           for (const material of assignment.assignmentMaterials) {
             if (material.fileUrl) {
-              const publicId = this.extractPublicIdFromUrl(material.fileUrl);
-              if (publicId) {
+              const key = this.s3Helper.extractKeyFromUrl(material.fileUrl);
+              if (key) {
                 materialDeletions.push(
-                  cloudinary.uploader.destroy(publicId).catch((error) => {
+                  this.s3Helper.deleteFile(key).catch((error) => {
                     console.error(
-                      `Failed to delete assignment material Cloudinary file: ${error}`,
+                      `Failed to delete assignment material S3 file: ${error}`,
                     );
                   }),
                 );
@@ -356,7 +353,6 @@ export class CourseManagementService {
         }
       }
 
-      // Delete all Cloudinary files in parallel
       await Promise.all(materialDeletions);
 
       // Bulk delete assignments (materials and submissions will be cascade-deleted)
@@ -520,20 +516,6 @@ export class CourseManagementService {
           }
         : undefined,
     };
-  }
-
-  private extractPublicIdFromUrl(url: string): string | null {
-    try {
-      // Cloudinary URL format: https://res.cloudinary.com/{cloud_name}/{resource_type}/upload/{version}/{public_id}.{format}
-      const matches = url.match(/\/upload\/[^/]+\/(.+)$/);
-      if (matches && matches[1]) {
-        // Remove file extension
-        return matches[1].replace(/\.[^/.]+$/, '');
-      }
-      return null;
-    } catch {
-      return null;
-    }
   }
 
   private mapQuizToDto(quiz: Quizzes) {

@@ -2,11 +2,11 @@
   {
     "name": "default",
     "type": "postgres",
-    "host": "ep-damp-pine-a891o3jc-pooler.eastus2.azure.neon.tech",
+    "host": "podium-education.cdy8uiike1t9.ap-south-1.rds.amazonaws.com",
     "port": 5432,
-    "username": "neondb_owner",
-    "password": "npg_mMzpaS42bUjf",
-    "database": "",
+    "username": "postgres",
+    "password": "gF23ZQZ0Hxi7gGboldvf",
+    "database": "postgres",
     "synchronize": false,
     "entities": ["entities/*.js"]
   }

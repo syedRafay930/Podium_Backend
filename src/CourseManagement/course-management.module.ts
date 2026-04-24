@@ -10,7 +10,7 @@ import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { CourseManagementController } from './course-management.controller';
 import { CourseManagementService } from './course-management.service';
 import { AuthModule } from '../Auth/auth.module';
-import { CloudinaryModule } from '../Cloudinary/cloudinary.module';
+import { S3Module } from '../S3/s3.module';
 import { Quizzes } from 'src/Entities/entities/Quizzes';
 
 //import { ResourcesModule } from '../Resources/resources.module';
@@ -19,7 +19,7 @@ import { Quizzes } from 'src/Entities/entities/Quizzes';
   imports: [
     TypeOrmModule.forFeature([Sections, Resources, Courses, Users, Assignment, Lectures, Enrollment, Quizzes]),
     AuthModule,
-    CloudinaryModule,
+    S3Module,
     //ResourcesModule,
   ],
   controllers: [CourseManagementController],

@@ -8,7 +8,7 @@ import { Lectures } from 'src/Entities/entities/Lectures';
 import { CourseService } from './courses.service';
 import { CourseController } from './courses.controller';
 import { AuthModule } from '../Auth/auth.module';
-import { CloudinaryModule } from 'src/Cloudinary/cloudinary.module';
+import { S3Module } from 'src/S3/s3.module';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { Assignment } from 'src/Entities/entities/Assignment';
 import { MailModule } from 'src/Nodemailer/mailer.module';
@@ -20,7 +20,7 @@ import { TemplateService } from './template.service';
   imports: [
     TypeOrmModule.forFeature([Courses, CourseRating, Users, CourseCategory, Lectures, Enrollment, Assignment]), 
     AuthModule, 
-    CloudinaryModule,
+    S3Module,
     MailModule,
     RedisModule,
   ],
