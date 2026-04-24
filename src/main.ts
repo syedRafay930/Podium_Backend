@@ -12,6 +12,7 @@ async function bootstrap() {
       'http://localhost:3000',
       'http://localhost:3006',
       'https://podium-professional.vercel.app',
+      'http://13.232.235.218:3006',
       /\.onrender\.com$/, 
     ],
     credentials: true,
