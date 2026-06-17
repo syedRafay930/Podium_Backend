@@ -100,6 +100,40 @@ export class AuthController {
     };
   }
 
+  @UseGuards(JwtBlacklistGuard)
+  @Get('profile')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get user profile',
+    description:
+      'Retrieve the authenticated user profile information. Requires a valid JWT token in the Authorization header.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile retrieved successfully',
+    type: LoginResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async getProfile(@Request() req) {
+    const user = await this.usersService.findByEmail(req.user.sub);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    const sidebar = await this.rbacService.getModulesByRole(req.user.role_id);
+    return {
+      message: 'Profile retrieved successfully',
+      user,
+      sidebar,
+    };
+  }
+
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiConsumes('application/json')
