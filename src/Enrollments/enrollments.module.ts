@@ -9,11 +9,13 @@ import { AdminEnrollmentsController } from './admin-enrollments.controller';
 import { AuthModule } from '../Auth/auth.module';
 import { Transactions } from 'src/Entities/entities/Transactions';
 import { MailModule } from 'src/Nodemailer/mailer.module';
+import { S3Module } from 'src/S3/s3.module';  
 @Module({
   imports: [
     TypeOrmModule.forFeature([Enrollment, Courses, Users, Transactions]),
     AuthModule,
-    MailModule
+    MailModule,
+    S3Module
   ],
   controllers: [EnrollmentsController, AdminEnrollmentsController],
   providers: [EnrollmentsService],

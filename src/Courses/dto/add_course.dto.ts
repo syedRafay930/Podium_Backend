@@ -8,6 +8,7 @@ import {
   ArrayNotEmpty,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type, Transform } from 'class-transformer';
 
 export class AddCourseDto {
   @ApiProperty({
@@ -17,7 +18,7 @@ export class AddCourseDto {
   })
   @IsNotEmpty()
   @IsString()
-  CourseName: string;
+  CourseName!: string;
 
   @ApiProperty({
     description: 'Short description of the course (max 200 characters)',
@@ -28,7 +29,7 @@ export class AddCourseDto {
   @IsNotEmpty()
   @IsString()
   @MaxLength(200)
-  ShortDescription: string;
+  ShortDescription!: string;
 
   @ApiProperty({
     description: 'Course price',
@@ -37,7 +38,7 @@ export class AddCourseDto {
   })
   @IsNotEmpty()
   @IsString()
-  Price: string;
+  Price!: string;
 
   @ApiProperty({
     description: 'Long description of the course',
@@ -47,7 +48,7 @@ export class AddCourseDto {
   })
   @IsOptional()
   @IsString()
-  LongDescription: string;
+  LongDescription?: string;
 
   @ApiProperty({
     description: 'Course category ID',
@@ -55,8 +56,9 @@ export class AddCourseDto {
     type: Number,
   })
   @IsNotEmpty()
+  @Type(() => Number)
   @IsNumber()
-  CourseCategoryId: number;
+  CourseCategoryId!: number;
 
   @ApiProperty({
     description: 'Teacher ID (optional)',
@@ -65,8 +67,9 @@ export class AddCourseDto {
     required: false,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
-  TeacherId: number;
+  TeacherId?: number;
 
   @ApiProperty({
     description: 'Languages available for the course',
@@ -76,7 +79,20 @@ export class AddCourseDto {
   @IsArray()
   @ArrayNotEmpty()
   @IsString({ each: true })
-  Languages: string[];
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value
+          .split(',')
+          .map((item: string) => item.trim())
+          .filter(Boolean);
+      }
+    }
+    return value;
+  })
+  Languages!: string[];
 
   // Note: This field is for Swagger documentation only.
   // FileInterceptor('image') extracts the file from multipart/form-data before it reaches this DTO.
@@ -87,5 +103,6 @@ export class AddCourseDto {
     description: 'Course cover image file (optional). File field name must be "image".',
     required: false,
   })
+  @IsOptional()
   image?: any;
 }

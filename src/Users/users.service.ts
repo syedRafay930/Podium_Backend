@@ -121,6 +121,11 @@ export class UsersService {
 
     const savedStudent = await this.usersRepository.save(student);
 
+    const freshStudent = await this.usersRepository.findOne({
+      where: { id: savedStudent.id },
+      relations: ['role'],
+    });
+
     // Send onboarding email with credentials
     try {
       const resetLink = await this.generateResetLink(createStudentDto.email);
@@ -134,6 +139,7 @@ export class UsersService {
           email: createStudentDto.email,
           password: tempPassword || 'Your chosen password',
           resetLink,
+          rollNumber: freshStudent?.rollNumber || 'N/A',
         },
       );
     } catch (error) {
@@ -141,37 +147,50 @@ export class UsersService {
     }
 
     return {
-      id: savedStudent.id,
-      firstName: savedStudent.firstName,
-      lastName: savedStudent.lastName,
-      email: savedStudent.email,
-      contactNumber: savedStudent.contactNumber,
-      role: savedStudent.role?.roleName || 'Student',
-      isActive: savedStudent.isActive,
-      createdAt: savedStudent.createdAt,
+      id: freshStudent?.id,
+      firstName: freshStudent?.firstName,
+      lastName: freshStudent?.lastName,
+      email: freshStudent?.email,
+      contactNumber: freshStudent?.contactNumber,
+      role: freshStudent?.role?.roleName || 'Student',
+      rollNumber: freshStudent?.rollNumber,
+      isActive: freshStudent?.isActive,
+      createdAt: freshStudent?.createdAt,
     };
   }
 
   async getAllStudents(page: number = 1, limit: number = 10): Promise<any> {
-    const [students, total] = await this.usersRepository.findAndCount({
-      where: { role: { id: 3 }, isDelete: false },
-      relations: ['role'],
-      skip: (page - 1) * limit,
-      take: limit,
-      order: { createdAt: 'DESC' },
-    });
+  const [students, total] = await this.usersRepository.findAndCount({
+    where: { role: { id: 3 }, isDelete: false },
+    relations: ['role'],
+    skip: (page - 1) * limit,
+    take: limit,
+    order: { createdAt: 'DESC' },
+  });
 
-    return {
-      data: students,
-      meta: {
-        totalItems: total,
-        itemCount: students.length,
-        itemsPerPage: limit,
-        totalPages: Math.ceil(total / limit),
-        currentPage: page,
-      },
-    };
-  }
+  const formattedStudents = students.map(student => ({
+    id: student.id,
+    firstName: student.firstName,
+    lastName: student.lastName,
+    email: student.email,
+    contactNumber: student.contactNumber,
+    role: student.role?.roleName || 'Student',
+    rollNumber: student.rollNumber,
+    isActive: student.isActive,
+    createdAt: student.createdAt,
+  }));
+
+  return {
+    data: formattedStudents,
+    meta: {
+      totalItems: total,
+      itemCount: students.length,
+      itemsPerPage: limit,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+    },
+  };
+}
 
   async getUserById(userId: number): Promise<Users> {
     const user = await this.usersRepository.findOne({
@@ -266,7 +285,8 @@ export class UsersService {
 
     const updatedUser = await this.usersRepository.save(user);
 
-    const { hashedPassword, isActive, role, createdBy, ...safeUser } = updatedUser;
+    const { hashedPassword, isActive, role, createdBy, ...safeUser } =
+      updatedUser;
     return safeUser;
   }
 

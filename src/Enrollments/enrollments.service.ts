@@ -12,6 +12,9 @@ import { Users } from 'src/Entities/entities/Users';
 import { CourseRating } from 'src/Entities/entities/CourseRating';
 import { Transactions } from 'src/Entities/entities/Transactions';
 import { MailService } from 'src/Nodemailer/mailer.service';
+import { UpdateEnrollmentStatusDto } from './dto/update-enrollment-status.dto';
+import { EnrollmentAction } from './dto/update-enrollment-status.dto';
+import { S3Helper } from 'src/S3/s3.helper';
 
 @Injectable()
 export class EnrollmentsService {
@@ -25,115 +28,9 @@ export class EnrollmentsService {
     @InjectRepository(Transactions)
     private readonly transactionRepository: Repository<Transactions>,
     private readonly mailService: MailService,
+    private readonly s3Helper: S3Helper,
   ) {}
 
-  async enrollStudent(
-    courseId: number,
-    studentId: number,
-    enrolledByUserId: number,
-    role_id: number,
-    status: 'pending' | 'enrolled',
-  ): Promise<Enrollment> {
-    // Verify course exists
-    const course = await this.courseRepository.findOne({
-      where: { id: courseId },
-    });
-
-    if (!course) {
-      throw new NotFoundException('Course not found');
-    }
-
-    // Verify student exists and has student role
-    const student = await this.usersRepository.findOne({
-      where: { id: studentId },
-      relations: ['role'],
-    });
-
-    if (!student) {
-      throw new NotFoundException('Student not found');
-    }
-
-    if (student.role.id !== 3) {
-      throw new BadRequestException(
-        'User must have student role to be enrolled',
-      );
-    }
-
-    // Check for duplicate enrollment
-    const existingEnrollment = await this.enrollmentRepository.findOne({
-      where: {
-        studentId,
-        courseId,
-      },
-    });
-
-    if (existingEnrollment) {
-      throw new ConflictException('Student is already enrolled in this course');
-    }
-
-    // Create enrollment
-    const enrollment = this.enrollmentRepository.create({
-      studentId,
-      courseId,
-      enrolledBy: enrolledByUserId as any,
-      lectureViewed: 0,
-      createdAt: new Date(),
-      status,
-    });
-    const savedEnrollment = await this.enrollmentRepository.save(enrollment);
-
-    let finalPaymentStatus: string;
-
-    // Check if course is free (price is 0 or null)
-    const coursePrice = course.price ? parseFloat(course.price) : 0;
-    if (coursePrice === 0 || course.price === null) {
-      finalPaymentStatus = 'free';
-    } else {
-      // Course has a price
-      if (role_id === 1) {
-        // Admin enrollment
-        finalPaymentStatus = 'paid';
-      } else {
-        // Default to 'paid' for admin enrollment
-        finalPaymentStatus = 'pending';
-      }
-    }
-    const transaction = this.transactionRepository.create({
-      uuid: `txn_${Date.now().toString(36)}`,
-      enrollId: savedEnrollment.id,
-      amount: course.price || '0',
-      status: finalPaymentStatus,
-      paymentType: 'cash',
-      createdAt: new Date(),
-    });
-    await this.transactionRepository.save(transaction);
-
-    // Send enrollment email notification
-    try {
-      const enrollmentDate = new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-      
-      await this.mailService.sendTemplatedMail(
-        student.email,
-        'Course Enrollment Confirmation - Podium',
-        'enrolled-student',
-        {
-          studentName: `${student.firstName} ${student.lastName}`,
-          courseName: course.courseName,
-          coursePrice: course.price || 'Free',
-          enrollmentDate,
-        },
-      );
-    } catch (error) {
-      console.error('Failed to send enrollment email:', error);
-      // Don't throw error - enrollment should succeed even if email fails
-    }
-
-    return savedEnrollment;
-  }
 
   async myEnrolledCourses(studentId: number): Promise<any[]> {
     const enrollments = await this.enrollmentRepository
@@ -148,6 +45,7 @@ export class EnrollmentsService {
           .where('courseRating.course_id = course.id');
       }, 'course_avgRating')
       .where('enrollment.studentId = :studentId', { studentId })
+      .andWhere('enrollment.status = :status', { status: 'enrolled' })
       .orderBy('enrollment.createdAt', 'DESC')
       .getRawAndEntities();
 
@@ -230,5 +128,269 @@ export class EnrollmentsService {
     enrollment.updatedAt = new Date();
     await this.enrollmentRepository.save(enrollment);
     return { message: 'Student dismissed from course successfully' };
+  }
+
+  async adminEnrollStudent(
+    courseId: number,
+    studentId: number,
+    adminId: number,
+  ): Promise<Enrollment> {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+
+    const student = await this.usersRepository.findOne({
+      where: { id: studentId },
+      relations: ['role'],
+    });
+    if (!student) throw new NotFoundException('Student not found');
+    if (student.role.id !== 3)
+      throw new BadRequestException(
+        'User must have student role to be enrolled',
+      );
+
+    // Check existing active enrollment
+    const existing = await this.enrollmentRepository.findOne({
+      where: { studentId, courseId, isActive: true },
+    });
+    if (existing)
+      throw new ConflictException('Student is already enrolled in this course');
+
+    const enrollment = this.enrollmentRepository.create({
+      studentId,
+      courseId,
+      enrolledBy: adminId as any,
+      lectureViewed: 0,
+      status: 'enrolled',
+      isActive: true,
+      createdAt: new Date(),
+    });
+    const savedEnrollment = await this.enrollmentRepository.save(enrollment);
+
+    const coursePrice = course.price ? parseFloat(course.price) : 0;
+    const transaction = this.transactionRepository.create({
+      uuid: `txn_${Date.now().toString(36)}`,
+      enrollId: savedEnrollment.id,
+      amount: course.price || '0',
+      status: coursePrice === 0 ? 'free' : 'paid',
+      paymentType: 'cash',
+      createdAt: new Date(),
+    });
+    await this.transactionRepository.save(transaction);
+
+    // Email
+    try {
+      const enrollmentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      await this.mailService.sendTemplatedMail(
+        student.email,
+        'Course Enrollment Confirmation - Podium',
+        'enrolled-student',
+        {
+          studentName: `${student.firstName} ${student.lastName}`,
+          courseName: course.courseName,
+          coursePrice: course.price || 'Free',
+          enrollmentDate,
+        },
+      );
+    } catch (error) {
+      console.error('Failed to send enrollment email:', error);
+    }
+
+    return savedEnrollment;
+  }
+
+  async studentSelfEnroll(
+    courseId: number,
+    studentId: number,
+    screenshot?: Express.Multer.File,
+  ): Promise<Enrollment> {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+
+    const student = await this.usersRepository.findOne({
+      where: { id: studentId },
+      relations: ['role'],
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    // Check existing active enrollment
+    const existing = await this.enrollmentRepository.findOne({
+      where: { studentId, courseId, isActive: true },
+    });
+    if (existing)
+      throw new ConflictException('Student is already enrolled in this course');
+
+    const coursePrice = course.price ? parseFloat(course.price) : 0;
+    const isFree = coursePrice === 0 || course.price === null;
+
+    // Paid course requires screenshot
+    if (!isFree && !screenshot) {
+      throw new BadRequestException(
+        'Payment screenshot is required for paid courses',
+      );
+    }
+
+    // Upload screenshot if provided
+    let screenshotUrl: string | null = null;
+    let screenshotKey: string | null = null;
+    if (screenshot) {
+      const uploaded = await this.s3Helper.uploadFile(
+        screenshot,
+        'enrollments/screenshots',
+      );
+      screenshotUrl = uploaded.url;
+      screenshotKey = uploaded.key;
+    }
+
+    const enrollment = this.enrollmentRepository.create({
+      studentId,
+      courseId,
+      enrolledBy: studentId as any,
+      lectureViewed: 0,
+      status: isFree ? 'enrolled' : 'pending',
+      isActive: true,
+      createdAt: new Date(),
+    });
+    const savedEnrollment = await this.enrollmentRepository.save(enrollment);
+
+    const transaction = this.transactionRepository.create({
+      uuid: `txn_${Date.now().toString(36)}`,
+      enrollId: savedEnrollment.id,
+      amount: course.price || '0',
+      status: isFree ? 'free' : 'pending',
+      paymentType: isFree ? null : 'online',
+      screenshotUrl,
+      createdAt: new Date(),
+    });
+    await this.transactionRepository.save(transaction);
+
+    // Email — free course direct confirmation, paid course "pending review"
+    try {
+      const enrollmentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+      if (isFree) {
+        await this.mailService.sendTemplatedMail(
+          student.email,
+          'Course Enrollment Confirmation - Podium',
+          'enrolled-student',
+          {
+            studentName: `${student.firstName} ${student.lastName}`,
+            courseName: course.courseName,
+            coursePrice: 'Free',
+            enrollmentDate,
+          },
+        );
+      } else {
+        await this.mailService.sendTemplatedMail(
+          student.email,
+          'Enrollment Request Received - Podium',
+          'enrollment-pending',
+          {
+            studentName: `${student.firstName} ${student.lastName}`,
+            courseName: course.courseName,
+            enrollmentDate,
+          },
+        );
+      }
+    } catch (error) {
+      console.error('Failed to send enrollment email:', error);
+    }
+
+    return savedEnrollment;
+  }
+
+  async updateEnrollmentStatus(
+    enrollmentId: number,
+    dto: UpdateEnrollmentStatusDto,
+  ): Promise<Enrollment> {
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { id: enrollmentId },
+      relations: ['student', 'course', 'transactions'],
+    });
+
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+    if (!enrollment.isActive)
+      throw new BadRequestException('This enrollment is no longer active');
+    if (enrollment.status !== 'pending') {
+      throw new BadRequestException('Only pending enrollments can be reviewed');
+    }
+
+    const updatedAt = new Date();
+
+    if (dto.action === EnrollmentAction.APPROVE) {
+      enrollment.status = 'enrolled';
+      enrollment.updatedAt = updatedAt;
+      await this.enrollmentRepository.save(enrollment);
+
+      // Update transaction status
+      await this.transactionRepository.update(
+        { enrollId: enrollmentId },
+        { status: 'paid', updatedAt },
+      );
+
+      // Approval email
+      try {
+        await this.mailService.sendTemplatedMail(
+          enrollment.student.email,
+          'Enrollment Approved - Podium',
+          'enrollment-approved',
+          {
+            studentName: `${enrollment.student.firstName} ${enrollment.student.lastName}`,
+            courseName: enrollment.course.courseName,
+          },
+        );
+      } catch (error) {
+        console.error('Failed to send approval email:', error);
+      }
+    } else if (dto.action === EnrollmentAction.REJECT) {
+      enrollment.status = 'rejected';
+      enrollment.isActive = false;
+      enrollment.rejectionReason = dto.rejectionReason || null;
+      enrollment.updatedAt = updatedAt;
+      await this.enrollmentRepository.save(enrollment);
+
+      // Delete screenshot from S3 if exists
+      if (enrollment.transactions?.screenshotUrl) {
+        try {
+          // Extract key from URL
+          const urlParts =
+            enrollment.transactions.screenshotUrl.split('.amazonaws.com/');
+          if (urlParts[1]) {
+            await this.s3Helper.deleteFile(urlParts[1]);
+          }
+        } catch (error) {
+          console.error('Failed to delete screenshot from S3:', error);
+        }
+      }
+
+      // Rejection email
+      try {
+        await this.mailService.sendTemplatedMail(
+          enrollment.student.email,
+          'Enrollment Request Rejected - Podium',
+          'enrollment-rejected',
+          {
+            studentName: `${enrollment.student.firstName} ${enrollment.student.lastName}`,
+            courseName: enrollment.course.courseName,
+            rejectionReason: dto.rejectionReason || 'No reason provided',
+          },
+        );
+      } catch (error) {
+        console.error('Failed to send rejection email:', error);
+      }
+    }
+
+    return enrollment;
   }
 }

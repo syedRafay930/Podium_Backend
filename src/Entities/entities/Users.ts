@@ -81,6 +81,13 @@ export class Users {
   })
   contactNumber: string | null;
 
+  @Column("character varying", {
+    name: "roll_number",
+    nullable: true,
+    length: 50,
+  })
+  rollNumber: string | null;
+
   @OneToMany(() => Assignment, (assignment) => assignment.createdBy)
   assignments: Assignment[];
 
