@@ -68,11 +68,10 @@ export class FeesService {
     // 3. Sorting and Pagination (Using getManyAndCount for safer execution)
     query
       .orderBy('transaction.createdAt', 'DESC')
-      .skip((page - 1) * limit) 
+      .skip((page - 1) * limit)
       .take(limit);
 
     const [transactions, total] = await query.getManyAndCount();
-
 
     const formattedTransactions: TransactionDto[] = transactions.map((txn) => ({
       uuid: txn.uuid,
@@ -86,6 +85,7 @@ export class FeesService {
       status: txn.status,
       paymentType: txn.paymentType,
       createdAt: txn.createdAt,
+      screenshotUrl: txn.screenshotUrl,
     }));
 
     const stats = await this.getFeesStats();
@@ -130,6 +130,19 @@ export class FeesService {
       pendingTransactionCount: pendingTransactions.length,
       totalTransactions: allTransactions.length,
     };
+  }
+
+  async getTransactionById(transactionId: string): Promise<Transactions> {
+    const transaction = await this.transactionsRepository.findOne({
+      where: { uuid: transactionId },
+      relations: ['enroll', 'enroll.student', 'enroll.course'],
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return transaction;
   }
 
   async updateTransactionStatus(
