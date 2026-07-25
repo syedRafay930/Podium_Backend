@@ -5,6 +5,7 @@ import {
   IsString,
   IsIn,
 } from 'class-validator';
+import {Type} from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger';
 
 export class EnrollCourseDto {
@@ -14,6 +15,7 @@ export class EnrollCourseDto {
     type: Number,
   })
   @IsNotEmpty()
+  @Type(()=> Number)
   @IsNumber()
   courseId: number;
 
