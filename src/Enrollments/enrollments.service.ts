@@ -15,6 +15,7 @@ import { MailService } from 'src/Nodemailer/mailer.service';
 import { UpdateEnrollmentStatusDto } from './dto/update-enrollment-status.dto';
 import { EnrollmentAction } from './dto/update-enrollment-status.dto';
 import { S3Helper } from 'src/S3/s3.helper';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class EnrollmentsService {
@@ -29,8 +30,50 @@ export class EnrollmentsService {
     private readonly transactionRepository: Repository<Transactions>,
     private readonly mailService: MailService,
     private readonly s3Helper: S3Helper,
+    private readonly dataSource: DataSource,
   ) {}
 
+  private async handlePostStatusUpdateTasks(
+    enrollment: Enrollment,
+    action: EnrollmentAction,
+  ) {
+    if (
+      action === EnrollmentAction.REJECT &&
+      enrollment.transactions?.screenshotUrl
+    ) {
+      try {
+        const urlParts =
+          enrollment.transactions.screenshotUrl.split('.amazonaws.com/');
+        if (urlParts[1]) await this.s3Helper.deleteFile(urlParts[1]);
+      } catch (error) {
+        console.error('Failed to delete screenshot from S3:', error);
+      }
+    }
+
+    const template =
+      action === EnrollmentAction.APPROVE
+        ? 'enrollment-approved'
+        : 'enrollment-rejected';
+    const subject =
+      action === EnrollmentAction.APPROVE
+        ? 'Enrollment Approved - Podium'
+        : 'Enrollment Request Rejected - Podium';
+
+    try {
+      await this.mailService.sendTemplatedMail(
+        enrollment.student.email,
+        subject,
+        template,
+        {
+          studentName: `${enrollment.student.firstName} ${enrollment.student.lastName}`,
+          courseName: enrollment.course.courseName,
+          rejectionReason: enrollment.rejectionReason || 'No reason provided',
+        },
+      );
+    } catch (error) {
+      console.error(`Failed to send ${template} email:`, error);
+    }
+  }
 
   async myEnrolledCourses(studentId: number): Promise<any[]> {
     const enrollments = await this.enrollmentRepository
@@ -322,74 +365,46 @@ export class EnrollmentsService {
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     if (!enrollment.isActive)
       throw new BadRequestException('This enrollment is no longer active');
-    if (enrollment.status !== 'pending') {
+    if (enrollment.status !== 'pending')
       throw new BadRequestException('Only pending enrollments can be reviewed');
-    }
 
     const updatedAt = new Date();
 
-    if (dto.action === EnrollmentAction.APPROVE) {
-      enrollment.status = 'enrolled';
-      enrollment.updatedAt = updatedAt;
-      await this.enrollmentRepository.save(enrollment);
+    // Use TypeORM Transaction for atomicity
+    await this.dataSource.transaction(async (transactionalEntityManager) => {
+      if (dto.action === EnrollmentAction.APPROVE) {
+        // 1. Update Enrollment
+        enrollment.status = 'enrolled';
+        enrollment.updatedAt = updatedAt;
+        await transactionalEntityManager.save(enrollment);
 
-      // Update transaction status
-      await this.transactionRepository.update(
-        { enrollId: enrollmentId },
-        { status: 'paid', updatedAt },
-      );
-
-      // Approval email
-      try {
-        await this.mailService.sendTemplatedMail(
-          enrollment.student.email,
-          'Enrollment Approved - Podium',
-          'enrollment-approved',
-          {
-            studentName: `${enrollment.student.firstName} ${enrollment.student.lastName}`,
-            courseName: enrollment.course.courseName,
-          },
+        // 2. Update Transaction
+        await transactionalEntityManager.update(
+          Transactions,
+          { enrollId: enrollmentId },
+          { status: 'paid', updatedAt },
         );
-      } catch (error) {
-        console.error('Failed to send approval email:', error);
-      }
-    } else if (dto.action === EnrollmentAction.REJECT) {
-      enrollment.status = 'rejected';
-      enrollment.isActive = false;
-      enrollment.rejectionReason = dto.rejectionReason || null;
-      enrollment.updatedAt = updatedAt;
-      await this.enrollmentRepository.save(enrollment);
+      } else if (dto.action === EnrollmentAction.REJECT) {
+        // 1. Update Enrollment
+        enrollment.status = 'rejected';
+        enrollment.isActive = false;
+        enrollment.rejectionReason = dto.rejectionReason || null;
+        enrollment.updatedAt = updatedAt;
+        await transactionalEntityManager.save(enrollment);
 
-      // Delete screenshot from S3 if exists
-      if (enrollment.transactions?.screenshotUrl) {
-        try {
-          // Extract key from URL
-          const urlParts =
-            enrollment.transactions.screenshotUrl.split('.amazonaws.com/');
-          if (urlParts[1]) {
-            await this.s3Helper.deleteFile(urlParts[1]);
-          }
-        } catch (error) {
-          console.error('Failed to delete screenshot from S3:', error);
-        }
-      }
-
-      // Rejection email
-      try {
-        await this.mailService.sendTemplatedMail(
-          enrollment.student.email,
-          'Enrollment Request Rejected - Podium',
-          'enrollment-rejected',
-          {
-            studentName: `${enrollment.student.firstName} ${enrollment.student.lastName}`,
-            courseName: enrollment.course.courseName,
-            rejectionReason: dto.rejectionReason || 'No reason provided',
-          },
+        // 2. Update Transaction Status to failed/rejected
+        await transactionalEntityManager.update(
+          Transactions,
+          { enrollId: enrollmentId },
+          { status: 'failed', updatedAt },
         );
-      } catch (error) {
-        console.error('Failed to send rejection email:', error);
       }
-    }
+    });
+
+    // Background Tasks (Outside DB Transaction)
+    this.handlePostStatusUpdateTasks(enrollment, dto.action).catch((err) =>
+      console.error('Post-update tasks failed:', err),
+    );
 
     return enrollment;
   }

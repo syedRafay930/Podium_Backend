@@ -22,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { FeesService } from './fees.service';
-import { FeesResponseDto } from './dto/fees-response.dto';
+import { FeesResponseDto, TransactionDto } from './dto/fees-response.dto';
 
 @ApiTags('Admin - Fees Management')
 @Controller('admin/fees')
@@ -150,6 +150,44 @@ export class FeesController {
     }
 
     return this.feesService.getFeesStats();
+  }
+
+  @Get('transactions/:transactionId')
+  @ApiOperation({
+    summary: 'Get transaction by ID',
+    description:
+      'Admin only - Get a single transaction with student and course details',
+  })
+  @ApiParam({
+    name: 'transactionId',
+    type: String,
+    description: 'Transaction UUID',
+    example: 'txn_1234567890',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Transaction retrieved successfully',
+    type: TransactionDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only admins can view transaction details',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - Transaction not found',
+  })
+  async getTransactionById(@Request() req, @Param('transactionId') transactionId: string) {
+    // Check if user is admin
+    if (req.user.role_id !== 1) {
+      throw new UnauthorizedException('Only admins can view transaction details');
+    }
+
+    return this.feesService.getTransactionById(transactionId);
   }
 
   @Patch('transactions/:transactionId')
