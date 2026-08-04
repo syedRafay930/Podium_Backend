@@ -101,7 +101,7 @@ export class CourseController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ 
     summary: 'Get all courses', 
-    description: 'Get paginated list of courses with optional filters for category and search. Supports pagination with page and limit parameters.' 
+    description: 'Get paginated list of available courses with optional filters for category and search. Courses the authenticated user is already enrolled in are excluded. Supports pagination with page and limit parameters.' 
   })
   @ApiQuery({ 
     name: 'page', 
@@ -159,7 +159,14 @@ export class CourseController {
     @Query('search') search?: string,
     @Query('teacherId') teacherId?: string,
   ) {
-    return this.courseService.getAllCourses(+page, +limit, category, search, teacherId);
+    return this.courseService.getAllCourses(
+      +page,
+      +limit,
+      category,
+      search,
+      teacherId,
+      req.user.id,
+    );
   }
 
   @UseGuards(JwtBlacklistGuard)

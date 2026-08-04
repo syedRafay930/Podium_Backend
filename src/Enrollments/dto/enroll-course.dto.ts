@@ -2,10 +2,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsNumber,
-  IsString,
-  IsIn,
 } from 'class-validator';
-import {Type} from 'class-transformer'
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class EnrollCourseDto {
@@ -15,18 +13,19 @@ export class EnrollCourseDto {
     type: Number,
   })
   @IsNotEmpty()
-  @Type(()=> Number)
+  @Type(() => Number)
   @IsNumber()
   courseId: number;
 
   @ApiProperty({
-    description: 'Student ID (only used when admin enrolls a student). For students, this is ignored and uses the authenticated user ID.',
+    description:
+      'Student ID (only used when admin enrolls a student). For students, this is ignored and uses the authenticated user ID.',
     example: 5,
     type: Number,
     required: false,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   studentId?: number;
-
 }

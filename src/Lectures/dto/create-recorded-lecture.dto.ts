@@ -1,4 +1,5 @@
 import { IsString, IsNumber, IsOptional, IsNotEmpty } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateRecordedLectureDto {
@@ -22,6 +23,7 @@ export class CreateRecordedLectureDto {
     example: 1,
     description: 'Course ID',
   })
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   courseId: number;
@@ -30,6 +32,7 @@ export class CreateRecordedLectureDto {
     example: 1,
     description: 'Section ID',
   })
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   sectionId: number;
@@ -38,6 +41,7 @@ export class CreateRecordedLectureDto {
     example: 1,
     description: 'Lecture order/sequence in section',
   })
+  @Type(() => Number)
   @IsNumber()
   @IsOptional()
   lectureOrder?: number;
@@ -46,6 +50,7 @@ export class CreateRecordedLectureDto {
     example: 3600,
     description: 'Duration of lecture in seconds',
   })
+  @Type(() => Number)
   @IsNumber()
   @IsOptional()
   duration?: number;

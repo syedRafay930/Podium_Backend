@@ -1,14 +1,13 @@
 import {
-  IsNotEmpty,
   IsOptional,
   IsString,
   IsNumber,
   MaxLength,
   IsArray,
-  ArrayNotEmpty,
   IsBoolean,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type, Transform } from 'class-transformer';
 
 export class EditCourseDto {
   @ApiProperty({
@@ -59,6 +58,7 @@ export class EditCourseDto {
     required: false,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   CourseCategoryId?: number;
 
@@ -69,6 +69,7 @@ export class EditCourseDto {
     required: false,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   TeacherId?: number;
 
@@ -81,6 +82,19 @@ export class EditCourseDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value
+          .split(',')
+          .map((item: string) => item.trim())
+          .filter(Boolean);
+      }
+    }
+    return value;
+  })
   Languages?: string[];
 
   // Note: This field is for Swagger documentation only.
@@ -102,6 +116,12 @@ export class EditCourseDto {
     required: false,
   })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return value;
+  })
   @IsBoolean()
   isActive?: boolean;
 }

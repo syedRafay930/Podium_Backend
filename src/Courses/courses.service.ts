@@ -101,6 +101,7 @@ export class CourseService {
     category?: string,
     search?: string,
     teacherId?: string,
+    userId?: number,
   ) {
     const query = this.courseRepository
       .createQueryBuilder('course')
@@ -131,6 +132,20 @@ export class CourseService {
       query.andWhere('teacher.id = :teacherId', { teacherId });
     }
 
+    if (userId) {
+      query.andWhere(
+        `course.id NOT IN (
+          SELECT enrollment.course_id
+          FROM enrollment
+          WHERE enrollment.student_id = :userId
+            AND enrollment.status = :enrolledStatus
+        )`,
+        { userId, enrolledStatus: 'enrolled' },
+      );
+    }
+
+    const total = await query.getCount();
+
     query.skip((page - 1) * limit).take(limit);
 
     const { entities, raw } = await query.getRawAndEntities();
@@ -138,10 +153,6 @@ export class CourseService {
       ...course,
       avgRating: raw[idx].avgRating ? parseFloat(raw[idx].avgRating) : 0,
     }));
-
-    const total = await this.courseRepository
-      .createQueryBuilder('course')
-      .getCount();
 
     return {
       data: courses,

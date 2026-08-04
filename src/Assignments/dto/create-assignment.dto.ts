@@ -6,6 +6,7 @@ import {
   IsDateString,
   MaxLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAssignmentDto {
@@ -57,6 +58,7 @@ export class CreateAssignmentDto {
     required: false,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   totalMarks?: number;
 
@@ -76,6 +78,7 @@ export class CreateAssignmentDto {
     type: Number,
   })
   @IsNotEmpty()
+  @Type(() => Number)
   @IsNumber()
   courseId: number;
 
@@ -85,7 +88,8 @@ export class CreateAssignmentDto {
     type: Number,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
-  sectionId: number;
+  sectionId?: number;
 }
 

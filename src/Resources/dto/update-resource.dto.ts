@@ -6,6 +6,7 @@ import {
   MaxLength,
   IsIn,
 } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateResourceDto {
@@ -49,6 +50,12 @@ export class UpdateResourceDto {
     required: false,
   })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return value;
+  })
   @IsBoolean()
   isPreview?: boolean;
 
@@ -59,6 +66,12 @@ export class UpdateResourceDto {
     required: false,
   })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return value;
+  })
   @IsBoolean()
   isActive?: boolean;
 
@@ -69,7 +82,7 @@ export class UpdateResourceDto {
     required: false,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   duration?: number;
 }
-
