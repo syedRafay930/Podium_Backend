@@ -11,6 +11,7 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -75,6 +76,41 @@ export class LecturesController {
       req.user.id,
       req.user.role_id,
     );
+  }
+
+  /**
+   * Mark recorded lecture as complete (student progress)
+   */
+  @Post(':lectureId/complete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark recorded lecture complete',
+    description:
+      'Student only - Mark a recorded lecture as completed for progress tracking. Idempotent.',
+  })
+  @ApiParam({
+    name: 'lectureId',
+    type: Number,
+    description: 'Lecture ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lecture marked as complete',
+  })
+  @ApiResponse({ status: 400, description: 'Not a recorded lecture' })
+  @ApiResponse({ status: 403, description: 'Not enrolled or not a student' })
+  @ApiResponse({ status: 404, description: 'Lecture not found' })
+  async markLectureComplete(
+    @Request() req,
+    @Param('lectureId', ParseIntPipe) lectureId: number,
+  ) {
+    if (req.user.role_id !== 3) {
+      throw new UnauthorizedException(
+        'Only students can mark lectures as complete',
+      );
+    }
+    return this.lecturesService.markLectureComplete(lectureId, req.user.id);
   }
 
   /**

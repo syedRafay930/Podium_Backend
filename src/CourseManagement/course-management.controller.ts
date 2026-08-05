@@ -36,6 +36,8 @@ import { UpdateResourceDto } from '../Resources/dto/update-resource.dto';
 import { SectionResponseDto } from './dto/section-response.dto';
 import { SectionWithContentResponseDto } from './dto/section-with-content-response.dto';
 import { ResourceListResponseDto } from 'src/Resources/dto/resource-list-response.dto';
+import { ProgressService } from 'src/Progress/progress.service';
+import { CourseProgressResponseDto } from 'src/Progress/dto/course-progress-response.dto';
 
 @ApiTags('Course Management')
 @Controller('courses')
@@ -44,10 +46,45 @@ import { ResourceListResponseDto } from 'src/Resources/dto/resource-list-respons
 export class CourseManagementController {
   constructor(
     private readonly courseManagementService: CourseManagementService,
+    private readonly progressService: ProgressService,
   ) {}
 
   // Section Management Endpoints
 
+  @Get(':courseId/progress')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get course progress for enrolled student',
+    description:
+      'Returns total and completed counts for lectures, assignments, and quizzes. Frontend calculates progress percentage.',
+  })
+  @ApiParam({
+    name: 'courseId',
+    type: Number,
+    description: 'Course ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Course progress retrieved successfully',
+    type: CourseProgressResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only enrolled students can view progress',
+  })
+  async getCourseProgress(
+    @Request() req,
+    @Param('courseId', ParseIntPipe) courseId: number,
+  ): Promise<CourseProgressResponseDto> {
+    if (req.user.role_id !== 3) {
+      throw new UnauthorizedException(
+        'Only students can view course progress',
+      );
+    }
+    return this.progressService.getCourseProgress(req.user.id, courseId);
+  }
   @Post(':courseId/sections')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

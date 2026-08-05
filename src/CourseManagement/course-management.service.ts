@@ -11,6 +11,7 @@ import { Resources } from 'src/Entities/entities/Resources';
 import { Courses } from 'src/Entities/entities/Courses';
 import { Users } from 'src/Entities/entities/Users';
 import { Assignment } from 'src/Entities/entities/Assignment';
+import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
 import { Lectures } from 'src/Entities/entities/Lectures';
 import { Quizzes } from 'src/Entities/entities/Quizzes';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
@@ -23,6 +24,7 @@ import { SectionWithContentResponseDto } from './dto/section-with-content-respon
 import { ResourceListResponseDto } from 'src/Resources/dto/resource-list-response.dto';
 //import { ResourcesService } from 'src/Resources/resources.service';
 import { S3Helper } from 'src/S3/s3.helper';
+import { ProgressService, ContentCompletionSets } from 'src/Progress/progress.service';
 
 @Injectable()
 export class CourseManagementService {
@@ -37,6 +39,8 @@ export class CourseManagementService {
     private readonly userRepository: Repository<Users>,
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentSubmission)
+    private readonly assignmentSubmissionRepository: Repository<AssignmentSubmission>,
     @InjectRepository(Lectures)
     private readonly lectureRepository: Repository<Lectures>,
     @InjectRepository(Enrollment)
@@ -44,6 +48,7 @@ export class CourseManagementService {
     @InjectRepository(Quizzes)
     private readonly quizRepository: Repository<Quizzes>,
     private readonly s3Helper: S3Helper,
+    private readonly progressService: ProgressService,
     //private readonly resourcesService: ResourcesService,
   ) {}
 
@@ -211,6 +216,29 @@ export class CourseManagementService {
     });
 
     // Get sections with content grouped by section
+    const completionSets: ContentCompletionSets | null =
+      roleId === 3
+        ? await this.progressService.getContentCompletionSets(userId, courseId)
+        : null;
+
+    // Student submissions for marks/status on assignments
+    const submissionByAssignmentId = new Map<number, AssignmentSubmission>();
+    if (roleId === 3) {
+      const submissions = await this.assignmentSubmissionRepository
+        .createQueryBuilder('submission')
+        .innerJoinAndSelect('submission.assignment', 'assignment')
+        .innerJoin('submission.student', 'student')
+        .where('student.id = :userId', { userId })
+        .andWhere('assignment.course_id = :courseId', { courseId })
+        .getMany();
+
+      for (const submission of submissions) {
+        if (submission.assignment?.id) {
+          submissionByAssignmentId.set(submission.assignment.id, submission);
+        }
+      }
+    }
+
     const sectionsWithContent = await Promise.all(
       sections.map(async (section) => {
         const quizWhereCondition: any = { section_id: section.id, isDelete: false };
@@ -248,7 +276,9 @@ export class CourseManagementService {
           assignments,
           lectures,
           resources,
-          quizzes
+          quizzes,
+          completionSets,
+          roleId === 3 ? submissionByAssignmentId : null,
         );
       }),
     );
@@ -407,6 +437,8 @@ export class CourseManagementService {
     lectures: Lectures[],
     resources: Resources[],
     quizzes: Quizzes[],
+    completionSets: ContentCompletionSets | null = null,
+    submissionByAssignmentId: Map<number, AssignmentSubmission> | null = null,
   ): SectionWithContentResponseDto {
     const dto: SectionWithContentResponseDto = {
       id: section.id,
@@ -415,10 +447,12 @@ export class CourseManagementService {
       courseId: section.courseId,
       createdAt: section.createdAt,
       updatedAt: section.updatedAt,
-      assignments: assignments.map((a) => this.mapAssignmentToDto(a)),
-      lectures: lectures.map((l) => this.mapLectureToDto(l)),
+      assignments: assignments.map((a) =>
+        this.mapAssignmentToDto(a, completionSets, submissionByAssignmentId),
+      ),
+      lectures: lectures.map((l) => this.mapLectureToDto(l, completionSets)),
       resources: resources.map((r) => this.mapResourceToContentDto(r)),
-      quizzes: quizzes.map((q) => this.mapQuizToDto(q)),
+      quizzes: quizzes.map((q) => this.mapQuizToDto(q, completionSets)),
     };
 
     if (section.createdBy2) {
@@ -440,7 +474,11 @@ export class CourseManagementService {
     return dto;
   }
 
-  private mapAssignmentToDto(assignment: Assignment) {
+  private mapAssignmentToDto(
+    assignment: Assignment,
+    completionSets: ContentCompletionSets | null = null,
+    submissionByAssignmentId: Map<number, AssignmentSubmission> | null = null,
+  ) {
     const materials = assignment.assignmentMaterials?.map((material) => ({
       id: material.id,
       fileUrl: material.fileUrl,
@@ -448,6 +486,11 @@ export class CourseManagementService {
       fileSize: material.fileSize,
       fileType: material.fileType,
     })) || [];
+
+    const submission = submissionByAssignmentId?.get(assignment.id);
+    const status = submissionByAssignmentId
+      ? submission?.status || 'missing'
+      : undefined;
 
     return {
       id: assignment.id,
@@ -467,10 +510,27 @@ export class CourseManagementService {
             lastName: assignment.createdBy.lastName,
           }
         : undefined,
+      ...(completionSets
+        ? { isCompleted: completionSets.assignmentIds.has(assignment.id) }
+        : {}),
+      ...(submissionByAssignmentId
+        ? {
+            status,
+            submittedAt: submission?.submittedAt ?? null,
+            marksObtained:
+              status === 'graded' || submission?.marksObtained != null
+                ? submission?.marksObtained ?? null
+                : null,
+            comments: status === 'graded' ? submission?.comments ?? null : null,
+          }
+        : {}),
     };
   }
 
-  private mapLectureToDto(lecture: Lectures) {
+  private mapLectureToDto(
+    lecture: Lectures,
+    completionSets: ContentCompletionSets | null = null,
+  ) {
     return {
       id: lecture.id,
       title: lecture.title,
@@ -490,6 +550,9 @@ export class CourseManagementService {
             lastName: lecture.createdBy.lastName,
           }
         : undefined,
+      ...(completionSets
+        ? { isCompleted: completionSets.lectureIds.has(lecture.id) }
+        : {}),
     };
   }
 
@@ -518,7 +581,10 @@ export class CourseManagementService {
     };
   }
 
-  private mapQuizToDto(quiz: Quizzes) {
+  private mapQuizToDto(
+    quiz: Quizzes,
+    completionSets: ContentCompletionSets | null = null,
+  ) {
   return {
     id: quiz.id,
     title: quiz.title,
@@ -535,6 +601,9 @@ export class CourseManagementService {
           lastName: quiz.createdBy.lastName,
         }
       : undefined,
+    ...(completionSets
+      ? { isCompleted: completionSets.quizIds.has(quiz.id) }
+      : {}),
   };
 }
 }

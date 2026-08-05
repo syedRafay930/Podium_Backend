@@ -12,14 +12,27 @@ import { CourseManagementService } from './course-management.service';
 import { AuthModule } from '../Auth/auth.module';
 import { S3Module } from '../S3/s3.module';
 import { Quizzes } from 'src/Entities/entities/Quizzes';
+import { ProgressModule } from 'src/Progress/progress.module';
+import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
 
 //import { ResourcesModule } from '../Resources/resources.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Sections, Resources, Courses, Users, Assignment, Lectures, Enrollment, Quizzes]),
+    TypeOrmModule.forFeature([
+      Sections,
+      Resources,
+      Courses,
+      Users,
+      Assignment,
+      AssignmentSubmission,
+      Lectures,
+      Enrollment,
+      Quizzes,
+    ]),
     AuthModule,
     S3Module,
+    ProgressModule,
     //ResourcesModule,
   ],
   controllers: [CourseManagementController],

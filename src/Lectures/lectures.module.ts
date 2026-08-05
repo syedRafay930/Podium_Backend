@@ -11,11 +11,13 @@ import { AuthModule } from 'src/Auth/auth.module';
 import { Attendance } from 'src/Entities/entities/Attendance';
 import { AttendanceDetails } from 'src/Entities/entities/AttendanceDetails';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
+import { ProgressModule } from 'src/Progress/progress.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Lectures, Courses, Sections, Users, Attendance, AttendanceDetails, Enrollment]),
     GoogleCalendarModule,
     AuthModule,
+    ProgressModule,
   ],
   controllers: [LecturesController],
   providers: [LecturesService],

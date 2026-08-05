@@ -18,6 +18,7 @@ import { LectureResponseDto } from './dto/lecture-response.dto';
 import { AttendanceDetails } from 'src/Entities/entities/AttendanceDetails';
 import { Attendance } from 'src/Entities/entities/Attendance';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
+import { ProgressService } from 'src/Progress/progress.service';
 
 @Injectable()
 export class LecturesService {
@@ -38,6 +39,7 @@ export class LecturesService {
     private readonly enrollmentRepository: Repository<Enrollment>,
 
     private readonly googleCalendarService: GoogleCalendarService,
+    private readonly progressService: ProgressService,
   ) {}
 
   /**
@@ -122,6 +124,13 @@ export class LecturesService {
     }
 
     return this.mapLectureToDto(fetchedLecture);
+  }
+
+  async markLectureComplete(lectureId: number, studentId: number) {
+    return this.progressService.markRecordedLectureComplete(
+      studentId,
+      lectureId,
+    );
   }
 
   /**
