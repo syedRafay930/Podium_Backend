@@ -74,6 +74,45 @@ export class AssignmentDto {
 
   @ApiProperty({ description: 'Creator information', type: UserBasicDto, required: false })
   createdBy?: UserBasicDto;
+
+  @ApiProperty({
+    description: 'Whether the authenticated student has completed this assignment',
+    example: false,
+    required: false,
+  })
+  isCompleted?: boolean;
+
+  @ApiProperty({
+    description: 'Student submission status (students only)',
+    example: 'graded',
+    enum: ['missing', 'submitted', 'graded', 'late'],
+    required: false,
+  })
+  status?: string | null;
+
+  @ApiProperty({
+    description: 'Marks obtained when graded (students only)',
+    example: 85,
+    required: false,
+    nullable: true,
+  })
+  marksObtained?: number | null;
+
+  @ApiProperty({
+    description: 'Grader comments when graded (students only)',
+    example: 'Well done',
+    required: false,
+    nullable: true,
+  })
+  comments?: string | null;
+
+  @ApiProperty({
+    description: 'Submission timestamp (students only)',
+    example: '2024-01-15T10:30:00Z',
+    required: false,
+    nullable: true,
+  })
+  submittedAt?: Date | null;
 }
 
 export class LectureDto {
@@ -112,6 +151,13 @@ export class LectureDto {
 
   @ApiProperty({ description: 'Creator information', type: UserBasicDto, required: false })
   createdBy?: UserBasicDto;
+
+  @ApiProperty({
+    description: 'Whether the authenticated student has completed this lecture',
+    example: false,
+    required: false,
+  })
+  isCompleted?: boolean;
 }
 
 export class ResourceDto {
@@ -185,6 +231,13 @@ export class QuizDto {
 
   @ApiProperty({ description: 'Creator information', type: UserBasicDto, required: false })
   createdBy?: UserBasicDto;
+
+  @ApiProperty({
+    description: 'Whether the authenticated student has completed this quiz',
+    example: false,
+    required: false,
+  })
+  isCompleted?: boolean;
 }
 
 export class SectionWithContentResponseDto {

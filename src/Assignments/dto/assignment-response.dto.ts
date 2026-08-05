@@ -82,5 +82,39 @@ export class AssignmentResponseDto {
 
   @ApiProperty({ description: 'Creator information', type: UserBasicDto })
   createdBy: UserBasicDto;
+
+  @ApiProperty({
+    description:
+      'Student submission status for this assignment (students only)',
+    example: 'graded',
+    enum: ['missing', 'submitted', 'graded', 'late'],
+    required: false,
+  })
+  status?: string | null;
+
+  @ApiProperty({
+    description:
+      'Marks obtained when the submission is graded (students only)',
+    example: 85,
+    required: false,
+    nullable: true,
+  })
+  marksObtained?: number | null;
+
+  @ApiProperty({
+    description: 'Grader comments (students only, when graded)',
+    example: 'Well done',
+    required: false,
+    nullable: true,
+  })
+  comments?: string | null;
+
+  @ApiProperty({
+    description: 'When the student submitted (students only)',
+    example: '2024-01-15T10:30:00Z',
+    required: false,
+    nullable: true,
+  })
+  submittedAt?: Date | null;
 }
 

@@ -16,6 +16,7 @@ import { UpdateEnrollmentStatusDto } from './dto/update-enrollment-status.dto';
 import { EnrollmentAction } from './dto/update-enrollment-status.dto';
 import { S3Helper } from 'src/S3/s3.helper';
 import { DataSource } from 'typeorm';
+import { ProgressService } from 'src/Progress/progress.service';
 
 @Injectable()
 export class EnrollmentsService {
@@ -31,6 +32,7 @@ export class EnrollmentsService {
     private readonly mailService: MailService,
     private readonly s3Helper: S3Helper,
     private readonly dataSource: DataSource,
+    private readonly progressService: ProgressService,
   ) {}
 
   private async handlePostStatusUpdateTasks(
@@ -92,13 +94,20 @@ export class EnrollmentsService {
       .orderBy('enrollment.createdAt', 'DESC')
       .getRawAndEntities();
 
-    // Map the results to include avgRating with each course and exclude sensitive fields
+    const courseIds = enrollments.entities
+      .map((enrollment) => enrollment.course?.id)
+      .filter((id): id is number => !!id);
+
+    const progressByCourse =
+      await this.progressService.getCoursesProgressBatch(studentId, courseIds);
+
     return enrollments.entities.map((enrollment, index) => {
       let teacherWithoutPassword: any = null;
       if (enrollment.course.teacher) {
         const { hashedPassword, ...rest } = enrollment.course.teacher;
         teacherWithoutPassword = rest;
       }
+      const courseProgress = progressByCourse.get(enrollment.course.id);
       return {
         ...enrollment,
         course: {
@@ -106,6 +115,19 @@ export class EnrollmentsService {
           teacher: teacherWithoutPassword,
           avgRating: enrollments.raw[index]?.course_avgRating || 0,
         },
+        progress: courseProgress
+          ? {
+              lectures: courseProgress.lectures,
+              assignments: courseProgress.assignments,
+              quizzes: courseProgress.quizzes,
+              overall: courseProgress.overall,
+            }
+          : {
+              lectures: { total: 0, completed: 0 },
+              assignments: { total: 0, completed: 0 },
+              quizzes: { total: 0, completed: 0 },
+              overall: { total: 0, completed: 0 },
+            },
       };
     });
   }

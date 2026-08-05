@@ -93,8 +93,8 @@ export class AttendanceService {
       relations: [
         'lecture',
         'teacher',
-        'attendanceDetais',
-        'attendanceDetais.student',
+        'attendanceDetails',
+        'attendanceDetails.student',
       ],
     });
 
@@ -123,7 +123,7 @@ export class AttendanceService {
   ) {
     const attendance = await this.attendanceRepo.findOne({
       where: { id: attendanceId },
-      relations: ['teacher'],
+      relations: ['teacher', 'attendanceDetails', 'attendanceDetails.student'],
     });
 
     if (!attendance) {
@@ -144,6 +144,45 @@ export class AttendanceService {
     attendance.updatedBy = { id: updatedById } as Users;
 
     await this.attendanceRepo.save(attendance);
+
+    if (dto.presentStudentIds?.length || dto.absentStudentIds?.length) {
+      const details =
+        attendance.attendanceDetails ||
+        (await this.attendanceDetailsRepo.find({
+          where: { attendance: { id: attendanceId } },
+          relations: ['student'],
+        }));
+
+      const detailByStudentId = new Map<number, AttendanceDetails>();
+      for (const detail of details) {
+        if (detail.student?.id) {
+          detailByStudentId.set(detail.student.id, detail);
+        }
+      }
+
+      const updates: AttendanceDetails[] = [];
+
+      for (const studentId of dto.presentStudentIds || []) {
+        const detail = detailByStudentId.get(studentId);
+        if (detail) {
+          detail.status = 'present';
+          updates.push(detail);
+        }
+      }
+
+      for (const studentId of dto.absentStudentIds || []) {
+        const detail = detailByStudentId.get(studentId);
+        if (detail) {
+          detail.status = 'absent';
+          updates.push(detail);
+        }
+      }
+
+      if (updates.length) {
+        await this.attendanceDetailsRepo.save(updates);
+      }
+    }
+
     return this.getAttendanceById(attendanceId, updatedById, 2);
   }
 }

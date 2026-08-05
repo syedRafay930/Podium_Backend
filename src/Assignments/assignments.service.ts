@@ -89,48 +89,42 @@ export class AssignmentsService {
       ]);
 
     if (roleId === 3) {
+      // Assignment.course is a relation (FK course_id) — join enrollment on course.id
       query
         .innerJoin(
           Enrollment,
           'enrollment',
-          'enrollment.courseId = assignment.course.id',
-        )
-        .where('enrollment.studentId = :userId', { userId });
+          'enrollment.courseId = course.id AND enrollment.studentId = :userId',
+          { userId },
+        );
 
       if (status) {
+        // AssignmentSubmission FKs are relations only; join via OneToMany
         query
           .innerJoin(
-            AssignmentSubmission,
+            'assignment.assignmentSubmissions',
             'submission',
-            'submission.assignment.id = assignment.id AND submission.student.id = :userId',
-            { userId },
+            'submission.student_id = :submissionUserId',
+            { submissionUserId: userId },
           )
           .andWhere('submission.status = :status', { status });
       }
     } else if (roleId === 2) {
       query
         .leftJoin('course.teacher', 'teacher')
-        .where('(assignment.createdBy.id = :userId OR teacher.id = :userId)', {
+        .where('(createdBy.id = :userId OR teacher.id = :userId)', {
           userId,
         });
 
       if (status) {
         query
-          .innerJoin(
-            AssignmentSubmission,
-            'submission',
-            'submission.assignment.id = assignment.id',
-          )
+          .innerJoin('assignment.assignmentSubmissions', 'submission')
           .andWhere('submission.status = :status', { status });
       }
     } else if (roleId === 1) {
       if (status) {
         query
-          .innerJoin(
-            AssignmentSubmission,
-            'submission',
-            'submission.assignment.id = assignment.id',
-          )
+          .innerJoin('assignment.assignmentSubmissions', 'submission')
           .andWhere('submission.status = :status', { status });
       }
     } else {
@@ -148,51 +142,44 @@ export class AssignmentsService {
 
     const countQuery = this.assignmentRepository
       .createQueryBuilder('assignment')
-      .leftJoin('assignment.course', 'course');
+      .leftJoin('assignment.course', 'course')
+      .leftJoin('assignment.createdBy', 'createdBy');
 
     if (roleId === 3) {
       countQuery
         .innerJoin(
           Enrollment,
           'enrollment',
-          'enrollment.courseId = assignment.course.id',
-        )
-        .where('enrollment.studentId = :userId', { userId });
+          'enrollment.courseId = course.id AND enrollment.studentId = :userId',
+          { userId },
+        );
 
       if (status) {
         countQuery
           .innerJoin(
-            AssignmentSubmission,
+            'assignment.assignmentSubmissions',
             'submission',
-            'submission.assignment.id = assignment.id AND submission.student.id = :userId',
-            { userId },
+            'submission.student_id = :submissionUserId',
+            { submissionUserId: userId },
           )
           .andWhere('submission.status = :status', { status });
       }
     } else if (roleId === 2) {
       countQuery
         .leftJoin('course.teacher', 'teacher')
-        .where('(assignment.createdBy.id = :userId OR teacher.id = :userId)', {
+        .where('(createdBy.id = :userId OR teacher.id = :userId)', {
           userId,
         });
 
       if (status) {
         countQuery
-          .innerJoin(
-            AssignmentSubmission,
-            'submission',
-            'submission.assignment.id = assignment.id',
-          )
+          .innerJoin('assignment.assignmentSubmissions', 'submission')
           .andWhere('submission.status = :status', { status });
       }
     } else if (roleId === 1) {
       if (status) {
         countQuery
-          .innerJoin(
-            AssignmentSubmission,
-            'submission',
-            'submission.assignment.id = assignment.id',
-          )
+          .innerJoin('assignment.assignmentSubmissions', 'submission')
           .andWhere('submission.status = :status', { status });
       }
     }
@@ -202,6 +189,24 @@ export class AssignmentsService {
     }
 
     const total = await countQuery.getCount();
+
+    // For students: load submission status + marks for listed assignments
+    const submissionByAssignmentId = new Map<number, AssignmentSubmission>();
+
+    if (roleId === 3 && assignments.length > 0) {
+      const assignmentIds = assignments.map((a) => a.id);
+      const submissions = await this.assignmentSubmissionRepository.find({
+        where: {
+          student: { id: userId },
+          assignment: { id: In(assignmentIds) },
+        },
+        relations: ['assignment'],
+      });
+
+      for (const submission of submissions) {
+        submissionByAssignmentId.set(submission.assignment.id, submission);
+      }
+    }
 
     const assignmentDtos: AssignmentResponseDto[] = assignments.map(
       (assignment) => {
@@ -214,7 +219,7 @@ export class AssignmentsService {
             fileType: material.fileType,
           })) || [];
 
-        return {
+        const dto: AssignmentResponseDto = {
           id: assignment.id,
           title: assignment.title,
           objective: assignment.objective,
@@ -234,6 +239,24 @@ export class AssignmentsService {
             lastName: assignment.createdBy.lastName,
           },
         };
+
+        if (roleId === 3) {
+          const submission = submissionByAssignmentId.get(assignment.id);
+          dto.status =
+            submission?.status || AssignmentSubmissionStatus.MISSING;
+          dto.submittedAt = submission?.submittedAt ?? null;
+          dto.marksObtained =
+            submission?.status === AssignmentSubmissionStatus.GRADED ||
+            submission?.marksObtained != null
+              ? submission.marksObtained
+              : null;
+          dto.comments =
+            submission?.status === AssignmentSubmissionStatus.GRADED
+              ? submission.comments
+              : null;
+        }
+
+        return dto;
       },
     );
 
