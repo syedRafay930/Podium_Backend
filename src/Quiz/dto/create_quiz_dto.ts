@@ -62,10 +62,6 @@ export class CreateQuizDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ example: 10 }) // Logged in teacher ID
-  @IsInt()
-  created_by: number;
-
   @ApiProperty({ example: 100 })
   @IsInt()
   total_marks: number;

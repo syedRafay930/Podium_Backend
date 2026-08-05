@@ -15,7 +15,6 @@ import { CreateRecordedLectureDto } from './dto/create-recorded-lecture.dto';
 import { CreateLiveLectureDto } from './dto/create-live-lecture.dto';
 import { UpdateLectureDto } from './dto/update-lecture.dto';
 import { LectureResponseDto } from './dto/lecture-response.dto';
-import { S3Helper } from 'src/S3/s3.helper';
 import { AttendanceDetails } from 'src/Entities/entities/AttendanceDetails';
 import { Attendance } from 'src/Entities/entities/Attendance';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
@@ -39,7 +38,6 @@ export class LecturesService {
     private readonly enrollmentRepository: Repository<Enrollment>,
 
     private readonly googleCalendarService: GoogleCalendarService,
-    private readonly s3Helper: S3Helper,
   ) {}
 
   /**
@@ -91,42 +89,21 @@ export class LecturesService {
   }
 
   /**
-   * Create recorded lecture with video upload
+   * Create recorded lecture with video URL from request body
    */
   async createRecordedLecture(
     dto: CreateRecordedLectureDto,
     userId: number,
     roleId: number,
-    videoFile?: Express.Multer.File,
   ): Promise<LectureResponseDto> {
-    // Validate course access
     await this.validateCourseAccess(dto.courseId, userId, roleId);
-
-    // Validate section belongs to course
     await this.validateSectionBelongsToCourse(dto.sectionId, dto.courseId);
 
-    let videoUrl: string | null = null;
-
-    if (videoFile) {
-      try {
-        const uploadResponse = await this.s3Helper.uploadFile(
-          videoFile,
-          'lectures/videos',
-        );
-        videoUrl = uploadResponse.url;
-      } catch (error) {
-        throw new BadRequestException(
-          `Failed to upload video: ${error.message}`,
-        );
-      }
-    }
-
-    // Create lecture
     const lecture = new Lectures();
     lecture.title = dto.title;
     lecture.description = dto.description || null;
     lecture.lectureType = 'recorded';
-    lecture.videoUrl = videoUrl || null;
+    lecture.videoUrl = dto.videoUrl || null;
     lecture.duration = dto.duration || null;
     lecture.lectureOrder = dto.lectureOrder || null;
     lecture.createdAt = new Date();

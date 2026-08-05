@@ -7,14 +7,11 @@ import {
   Body,
   Param,
   UseGuards,
-  UseInterceptors,
-  UploadedFile,
   Request,
   ParseIntPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -22,7 +19,6 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiBody,
-  ApiConsumes,
 } from '@nestjs/swagger';
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { LecturesService } from './lectures.service';
@@ -39,60 +35,16 @@ export class LecturesController {
   constructor(private readonly lecturesService: LecturesService) {}
 
   /**
-   * Create recorded lecture with video upload
+   * Create recorded lecture with video URL
    */
   @Post('recorded')
-  @UseInterceptors(FileInterceptor('video'))
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create Recorded Lecture',
     description:
-      'Teacher only - Create a recorded lecture with video file upload to Cloudinary. Video file is optional.',
+      'Teacher only - Create a recorded lecture. Pass an optional videoUrl in the JSON body; it is saved directly to the database.',
   })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        title: {
-          type: 'string',
-          example: 'Introduction to Databases',
-          description: 'Lecture title',
-        },
-        description: {
-          type: 'string',
-          example: 'Learn database basics',
-          description: 'Optional lecture description',
-        },
-        courseId: {
-          type: 'number',
-          example: 1,
-          description: 'Course ID',
-        },
-        sectionId: {
-          type: 'number',
-          example: 1,
-          description: 'Section ID',
-        },
-        lectureOrder: {
-          type: 'number',
-          example: 1,
-          description: 'Optional lecture order in section',
-        },
-        duration: {
-          type: 'number',
-          example: 3600,
-          description: 'Optional duration in seconds',
-        },
-        video: {
-          type: 'string',
-          format: 'binary',
-          description: 'Optional video file (MP4, WebM, etc.)',
-        },
-      },
-      required: ['title', 'courseId', 'sectionId'],
-    },
-  })
+  @ApiBody({ type: CreateRecordedLectureDto })
   @ApiResponse({
     status: 201,
     description: 'Recorded lecture created successfully',
@@ -100,7 +52,7 @@ export class LecturesController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - Invalid input or video upload failed',
+    description: 'Bad request - Invalid input',
   })
   @ApiResponse({
     status: 401,
@@ -117,13 +69,11 @@ export class LecturesController {
   async createRecordedLecture(
     @Request() req,
     @Body() createRecordedLectureDto: CreateRecordedLectureDto,
-    @UploadedFile() video?: Express.Multer.File,
   ): Promise<LectureResponseDto> {
     return this.lecturesService.createRecordedLecture(
       createRecordedLectureDto,
       req.user.id,
       req.user.role_id,
-      video,
     );
   }
 

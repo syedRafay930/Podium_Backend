@@ -42,8 +42,7 @@ export class QuizController {
     if (req.user.role_id === 3) {
       throw new UnauthorizedException('Only teachers can create quizzes.');
     }
-    createQuizDto.created_by = req.user.id;
-    return this.quizService.createQuiz(createQuizDto);
+    return this.quizService.createQuiz(createQuizDto,req.user.id);
   }
 
   @UseGuards(JwtBlacklistGuard)

@@ -19,7 +19,7 @@ import { GradeQuizDto } from './dto/graded_quiz.dto';
 export class QuizService {
   constructor(private dataSource: DataSource) {}
 
-  async createQuiz(createQuizDto: CreateQuizDto) {
+  async createQuiz(createQuizDto: CreateQuizDto,userId:number) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -37,7 +37,7 @@ export class QuizService {
         isPublished: quizData.is_Published,
         course_id: quizData.course_id,
         section_id: quizData.section_id,
-        created_by: quizData.created_by,
+        created_by: userId,
         createdAt: new Date(),
       });
       const savedQuiz = await queryRunner.manager.save(quiz);

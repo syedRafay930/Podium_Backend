@@ -55,6 +55,11 @@ export class CreateRecordedLectureDto {
   @IsOptional()
   duration?: number;
 
-  // Note: videoUrl will be populated from file upload to Cloudinary
-  // lectureType will be set to 'recorded' automatically
+  @ApiPropertyOptional({
+    example: 'https://example.com/videos/intro-to-databases.mp4',
+    description: 'External video URL to store for this recorded lecture',
+  })
+  @IsOptional()
+  @IsString()
+  videoUrl?: string;
 }
