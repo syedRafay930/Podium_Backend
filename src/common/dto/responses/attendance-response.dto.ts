@@ -63,6 +63,13 @@ export class AttendanceResponseDto {
   attendanceDate: string;
 
   @ApiProperty({
+    example: false,
+    description:
+      'Whether attendance has already been marked. If true, teacher can only view (PATCH blocked).',
+  })
+  isMarked: boolean;
+
+  @ApiProperty({
     type: AttendanceLectureDto,
   })
   lecture: AttendanceLectureDto;

@@ -11,18 +11,31 @@ import { AuthModule } from '../Auth/auth.module';
 import { S3Module } from 'src/S3/s3.module';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { Assignment } from 'src/Entities/entities/Assignment';
+import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
+import { Attendance } from 'src/Entities/entities/Attendance';
 import { MailModule } from 'src/Nodemailer/mailer.module';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { TemplateService } from './template.service';
-
+import { GoogleCalendarModule } from 'src/GoogleCalendar/google-calendar.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Courses, CourseRating, Users, CourseCategory, Lectures, Enrollment, Assignment]), 
-    AuthModule, 
+    TypeOrmModule.forFeature([
+      Courses,
+      CourseRating,
+      Users,
+      CourseCategory,
+      Lectures,
+      Enrollment,
+      Assignment,
+      AssignmentSubmission,
+      Attendance,
+    ]),
+    AuthModule,
     S3Module,
     MailModule,
     RedisModule,
+    GoogleCalendarModule,
   ],
   controllers: [CourseController],
   providers: [CourseService, TemplateService],

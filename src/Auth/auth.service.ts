@@ -1,10 +1,13 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Not, IsNull } from 'typeorm';
 import { UsersService } from 'src/Users/users.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from './redis.service';
 import { MailService } from 'src/Nodemailer/mailer.service';
+import { GoogleCredentials } from 'src/Entities/entities/GoogleCredentials';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +17,8 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
     private readonly mailService: MailService,
+    @InjectRepository(GoogleCredentials)
+    private readonly googleCredentialsRepository: Repository<GoogleCredentials>,
   ) {}
 
   async validateUserByEmail(email: string, login_password: string) {
@@ -52,6 +57,19 @@ export class AuthService {
 
     const { hashedPassword, ...userWithoutPassword } = user;
     return userWithoutPassword;
+  }
+
+  async isGoogleConnected(userId: number): Promise<boolean> {
+    const credentials = await this.googleCredentialsRepository.findOne({
+      where: {
+        userId,
+        isActive: true,
+        accessToken: Not(IsNull()),
+      },
+      select: ['id', 'accessToken'],
+    });
+
+    return !!(credentials?.accessToken && credentials.accessToken.trim());
   }
 
   async generateJwtToken(user: any): Promise<string> {

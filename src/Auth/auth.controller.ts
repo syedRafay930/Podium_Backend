@@ -9,6 +9,7 @@ import {
   Request,
   HttpCode,
   BadRequestException,
+  UnauthorizedException,
   HttpStatus,
 } from '@nestjs/common';
 import {
@@ -92,11 +93,15 @@ export class AuthController {
     }
     const token = await this.authService.generateJwtToken(user);
     const sidebar = await this.rbacService.getModulesByRole(user.role.id);
+    const is_google_connected = await this.authService.isGoogleConnected(
+      user.id,
+    );
     return {
       message: 'Login successful',
       access_token: token,
       user,
       sidebar,
+      is_google_connected,
     };
   }
 
@@ -122,15 +127,37 @@ export class AuthController {
     description: 'Internal server error',
   })
   async getProfile(@Request() req) {
-    const user = await this.usersService.findByEmail(req.user.sub);
-    if (!user) {
+    // JwtStrategy maps payload to { id, email, role_id, ... } — not payload.sub
+    const userId = req.user?.id;
+    const email = req.user?.email;
+
+    if (!userId && !email) {
+      throw new UnauthorizedException('Invalid token payload');
+    }
+
+    const user = userId
+      ? await this.usersService.findById(userId)
+      : await this.usersService.findByEmail(email);
+
+    if (!user || user.isDelete) {
       throw new BadRequestException('User not found');
     }
-    const sidebar = await this.rbacService.getModulesByRole(req.user.role_id);
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('User is Blocked');
+    }
+
+    const { hashedPassword, ...userWithoutPassword } = user;
+    const sidebar = await this.rbacService.getModulesByRole(user.role.id);
+    const is_google_connected = await this.authService.isGoogleConnected(
+      user.id,
+    );
+
     return {
       message: 'Profile retrieved successfully',
-      user,
+      user: userWithoutPassword,
       sidebar,
+      is_google_connected,
     };
   }
 

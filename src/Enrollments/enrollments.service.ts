@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,12 +12,19 @@ import { Courses } from 'src/Entities/entities/Courses';
 import { Users } from 'src/Entities/entities/Users';
 import { CourseRating } from 'src/Entities/entities/CourseRating';
 import { Transactions } from 'src/Entities/entities/Transactions';
+import { Lectures } from 'src/Entities/entities/Lectures';
+import { Assignment } from 'src/Entities/entities/Assignment';
+import { Quizzes } from 'src/Entities/entities/Quizzes';
+import { Resources } from 'src/Entities/entities/Resources';
 import { MailService } from 'src/Nodemailer/mailer.service';
 import { UpdateEnrollmentStatusDto } from './dto/update-enrollment-status.dto';
 import { EnrollmentAction } from './dto/update-enrollment-status.dto';
 import { S3Helper } from 'src/S3/s3.helper';
 import { DataSource } from 'typeorm';
 import { ProgressService } from 'src/Progress/progress.service';
+import { AttendanceService } from 'src/Attendance/attendance.service';
+
+type CourseUpdateType = 'lecture' | 'assignment' | 'quiz' | 'resource';
 
 @Injectable()
 export class EnrollmentsService {
@@ -29,10 +37,19 @@ export class EnrollmentsService {
     private readonly usersRepository: Repository<Users>,
     @InjectRepository(Transactions)
     private readonly transactionRepository: Repository<Transactions>,
+    @InjectRepository(Lectures)
+    private readonly lectureRepository: Repository<Lectures>,
+    @InjectRepository(Assignment)
+    private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(Quizzes)
+    private readonly quizRepository: Repository<Quizzes>,
+    @InjectRepository(Resources)
+    private readonly resourceRepository: Repository<Resources>,
     private readonly mailService: MailService,
     private readonly s3Helper: S3Helper,
     private readonly dataSource: DataSource,
     private readonly progressService: ProgressService,
+    private readonly attendanceService: AttendanceService,
   ) {}
 
   private async handlePostStatusUpdateTasks(
@@ -130,6 +147,406 @@ export class EnrollmentsService {
             },
       };
     });
+  }
+
+  /* =====================================================
+     STUDENT: MY ENROLLMENT REQUESTS (ALL STATUSES)
+     ===================================================== */
+
+  async myEnrollmentRequests(
+    studentId: number,
+    status?: 'pending' | 'enrolled' | 'rejected' | 'dismissed',
+  ) {
+    const qb = this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .leftJoinAndSelect('enrollment.course', 'course')
+      .leftJoinAndSelect('course.courseCategory', 'courseCategory')
+      .leftJoinAndSelect('course.teacher', 'teacher')
+      .leftJoinAndSelect('enrollment.transactions', 'transactions')
+      .where('enrollment.studentId = :studentId', { studentId })
+      .orderBy('enrollment.createdAt', 'DESC');
+
+    if (status) {
+      qb.andWhere('enrollment.status = :status', { status });
+    }
+
+    const enrollments = await qb.getMany();
+
+    const data = enrollments.map((enrollment) => {
+      let teacher: {
+        id: number;
+        firstName: string;
+        lastName: string;
+        email: string;
+      } | null = null;
+
+      if (enrollment.course?.teacher) {
+        teacher = {
+          id: enrollment.course.teacher.id,
+          firstName: enrollment.course.teacher.firstName,
+          lastName: enrollment.course.teacher.lastName,
+          email: enrollment.course.teacher.email,
+        };
+      }
+
+      const txn = enrollment.transactions;
+
+      return {
+        id: enrollment.id,
+        status: enrollment.status,
+        isActive: enrollment.isActive,
+        rejectionReason: enrollment.rejectionReason,
+        createdAt: enrollment.createdAt,
+        updatedAt: enrollment.updatedAt,
+        course: enrollment.course
+          ? {
+              id: enrollment.course.id,
+              courseName: enrollment.course.courseName,
+              price: enrollment.course.price,
+              coverImg: enrollment.course.coverImg,
+              shortDescription: enrollment.course.shortDescription,
+              courseCategory: enrollment.course.courseCategory
+                ? {
+                    id: enrollment.course.courseCategory.id,
+                    name: enrollment.course.courseCategory.name,
+                  }
+                : null,
+              teacher,
+            }
+          : null,
+        transaction: txn
+          ? {
+              id: txn.id,
+              amount: txn.amount,
+              status: txn.status,
+              paymentType: txn.paymentType,
+              screenshotUrl: txn.screenshotUrl,
+              createdAt: txn.createdAt,
+              updatedAt: txn.updatedAt,
+            }
+          : null,
+      };
+    });
+
+    const summary = {
+      pending: data.filter((item) => item.status === 'pending').length,
+      enrolled: data.filter((item) => item.status === 'enrolled').length,
+      rejected: data.filter((item) => item.status === 'rejected').length,
+      dismissed: data.filter((item) => item.status === 'dismissed').length,
+      total: data.length,
+    };
+
+    return { data, summary };
+  }
+
+  /* =====================================================
+     STUDENT: MY COURSE MATERIAL UPDATES (RECENT FEED)
+     ===================================================== */
+
+  async myCourseUpdates(
+    studentId: number,
+    options?: {
+      limit?: number;
+      courseId?: number;
+      types?: CourseUpdateType[];
+    },
+  ) {
+    const limit = Math.min(Math.max(options?.limit ?? 20, 1), 50);
+    const allowedTypes: CourseUpdateType[] = [
+      'lecture',
+      'assignment',
+      'quiz',
+      'resource',
+    ];
+    const types =
+      options?.types?.filter((type) => allowedTypes.includes(type)) ??
+      allowedTypes;
+
+    const enrollments = await this.enrollmentRepository.find({
+      where: { studentId, status: 'enrolled' },
+      select: ['courseId'],
+    });
+
+    let courseIds = enrollments.map((enrollment) => enrollment.courseId);
+
+    if (options?.courseId) {
+      if (!courseIds.includes(options.courseId)) {
+        throw new ForbiddenException('You are not enrolled in this course');
+      }
+      courseIds = [options.courseId];
+    }
+
+    if (!courseIds.length || !types.length) {
+      return {
+        data: [],
+        meta: { returned: 0, limit },
+      };
+    }
+
+    const fetchLimit = limit;
+    const items: Array<{
+      type: CourseUpdateType;
+      id: number;
+      title: string;
+      occurredAt: Date | null;
+      lectureType?: string | null;
+      resourceType?: string | null;
+      course: { id: number; courseName: string };
+      section: { id: number; title: string } | null;
+    }> = [];
+
+    const mapSection = (section?: { id: number; title: string } | null) =>
+      section ? { id: section.id, title: section.title } : null;
+
+    const tasks: Promise<void>[] = [];
+
+    if (types.includes('lecture')) {
+      tasks.push(
+        (async () => {
+          const lectures = await this.lectureRepository
+            .createQueryBuilder('lecture')
+            .innerJoinAndSelect('lecture.course', 'course')
+            .leftJoinAndSelect('lecture.section', 'section')
+            .where('course.id IN (:...courseIds)', { courseIds })
+            .andWhere('lecture.isDelete = false')
+            .orderBy('lecture.createdAt', 'DESC')
+            .take(fetchLimit)
+            .getMany();
+
+          for (const lecture of lectures) {
+            items.push({
+              type: 'lecture',
+              id: lecture.id,
+              title: lecture.title,
+              occurredAt: lecture.createdAt,
+              lectureType: lecture.lectureType,
+              course: {
+                id: lecture.course.id,
+                courseName: lecture.course.courseName,
+              },
+              section: mapSection(lecture.section),
+            });
+          }
+        })(),
+      );
+    }
+
+    if (types.includes('assignment')) {
+      tasks.push(
+        (async () => {
+          const assignments = await this.assignmentRepository
+            .createQueryBuilder('assignment')
+            .innerJoinAndSelect('assignment.course', 'course')
+            .leftJoinAndSelect('assignment.section', 'section')
+            .where('course.id IN (:...courseIds)', { courseIds })
+            .orderBy('assignment.createdAt', 'DESC')
+            .take(fetchLimit)
+            .getMany();
+
+          for (const assignment of assignments) {
+            items.push({
+              type: 'assignment',
+              id: assignment.id,
+              title: assignment.title,
+              occurredAt: assignment.createdAt,
+              course: {
+                id: assignment.course.id,
+                courseName: assignment.course.courseName,
+              },
+              section: mapSection(assignment.section),
+            });
+          }
+        })(),
+      );
+    }
+
+    if (types.includes('quiz')) {
+      tasks.push(
+        (async () => {
+          const quizzes = await this.quizRepository
+            .createQueryBuilder('quiz')
+            .innerJoinAndSelect('quiz.course', 'course')
+            .leftJoinAndSelect('quiz.section', 'section')
+            .where('course.id IN (:...courseIds)', { courseIds })
+            .andWhere('quiz.isDelete = false')
+            .andWhere('quiz.isPublished = true')
+            .orderBy('quiz.createdAt', 'DESC')
+            .take(fetchLimit)
+            .getMany();
+
+          for (const quiz of quizzes) {
+            items.push({
+              type: 'quiz',
+              id: quiz.id,
+              title: quiz.title,
+              occurredAt: quiz.createdAt,
+              course: {
+                id: quiz.course.id,
+                courseName: quiz.course.courseName,
+              },
+              section: mapSection(quiz.section),
+            });
+          }
+        })(),
+      );
+    }
+
+    if (types.includes('resource')) {
+      tasks.push(
+        (async () => {
+          const resources = await this.resourceRepository
+            .createQueryBuilder('resource')
+            .innerJoinAndSelect('resource.course', 'course')
+            .leftJoinAndSelect('resource.section', 'section')
+            .where('course.id IN (:...courseIds)', { courseIds })
+            .andWhere('resource.isActive = true')
+            .orderBy('resource.createdAt', 'DESC')
+            .take(fetchLimit)
+            .getMany();
+
+          for (const resource of resources) {
+            items.push({
+              type: 'resource',
+              id: resource.id,
+              title: resource.title,
+              occurredAt: resource.createdAt,
+              resourceType: resource.resourceType,
+              course: {
+                id: resource.course.id,
+                courseName: resource.course.courseName,
+              },
+              section: mapSection(resource.section),
+            });
+          }
+        })(),
+      );
+    }
+
+    await Promise.all(tasks);
+
+    items.sort((a, b) => {
+      const aTime = a.occurredAt ? new Date(a.occurredAt).getTime() : 0;
+      const bTime = b.occurredAt ? new Date(b.occurredAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    const data = items.slice(0, limit);
+
+    return {
+      data,
+      meta: {
+        returned: data.length,
+        limit,
+      },
+    };
+  }
+
+  /* =====================================================
+     STUDENT: DASHBOARD HOME AGGREGATE
+     ===================================================== */
+
+  async myDashboard(studentId: number) {
+    const user = await this.usersRepository.findOne({
+      where: { id: studentId },
+    });
+
+    if (!user || user.isDelete) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const [enrolledCourses, enrollmentRequests, recentUpdates, attendance] =
+      await Promise.all([
+        this.myEnrolledCourses(studentId),
+        this.myEnrollmentRequests(studentId),
+        this.myCourseUpdates(studentId, { limit: 5 }),
+        this.attendanceService.getMyAttendance(studentId),
+      ]);
+
+    const progressPercents = enrolledCourses
+      .map((enrollment) => {
+        const total = enrollment.progress?.overall?.total ?? 0;
+        const completed = enrollment.progress?.overall?.completed ?? 0;
+        if (!total) return null;
+        return (completed / total) * 100;
+      })
+      .filter((value): value is number => value !== null);
+
+    const averageProgressPercent = progressPercents.length
+      ? Math.round(
+          (progressPercents.reduce((sum, value) => sum + value, 0) /
+            progressPercents.length) *
+            10,
+        ) / 10
+      : null;
+
+    const attendanceSummary = attendance.summary;
+    const marked =
+      (attendanceSummary.present ?? 0) + (attendanceSummary.absent ?? 0);
+    const attendanceRatePercent = marked
+      ? Math.round(((attendanceSummary.present ?? 0) / marked) * 1000) / 10
+      : null;
+
+    const recentCourses = enrolledCourses.slice(0, 4).map((enrollment) => {
+      const total = enrollment.progress?.overall?.total ?? 0;
+      const completed = enrollment.progress?.overall?.completed ?? 0;
+      return {
+        enrollmentId: enrollment.id,
+        courseId: enrollment.course?.id,
+        courseName: enrollment.course?.courseName,
+        coverImg: enrollment.course?.coverImg ?? null,
+        shortDescription: enrollment.course?.shortDescription ?? null,
+        overall: { total, completed },
+        progressPercent: total
+          ? Math.round((completed / total) * 1000) / 10
+          : null,
+      };
+    });
+
+    const pendingEnrollments = enrollmentRequests.data
+      .filter((item) => item.status === 'pending')
+      .slice(0, 5)
+      .map((item) => ({
+        id: item.id,
+        courseId: item.course?.id,
+        courseName: item.course?.courseName,
+        coverImg: item.course?.coverImg ?? null,
+        createdAt: item.createdAt,
+        paymentStatus: item.transaction?.status ?? null,
+      }));
+
+    const recentAttendance = (attendance.data ?? []).slice(0, 5).map((item) => ({
+      attendanceId: item.attendanceId,
+      attendanceDate: item.attendanceDate,
+      status: item.status,
+      lectureTitle: item.lecture?.title,
+      courseName: item.course?.courseName,
+      courseId: item.course?.id,
+    }));
+
+    return {
+      welcome: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+      },
+      metrics: {
+        enrolledCoursesCount: enrolledCourses.length,
+        pendingEnrollmentCount: enrollmentRequests.summary.pending,
+        averageProgressPercent,
+        attendance: {
+          present: attendanceSummary.present,
+          absent: attendanceSummary.absent,
+          pending: attendanceSummary.pending,
+          total: attendanceSummary.total,
+          ratePercent: attendanceRatePercent,
+        },
+      },
+      recentCourses,
+      pendingEnrollments,
+      recentUpdates: recentUpdates.data,
+      recentAttendance,
+    };
   }
 
   async getAllEnrollments(): Promise<Enrollment[]> {

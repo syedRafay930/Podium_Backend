@@ -193,6 +193,7 @@ export class LecturesService {
       attendanceDate: new Date(dto.liveStart).toISOString().split('T')[0],
       lecture: { id: savedLecture.id } as Lectures,
       teacher: { id: userId } as Users,
+      isMarked: false,
       createdAt: new Date(),
     });
 

@@ -32,6 +32,8 @@ import { UploadedFile } from '@nestjs/common';
 import { CourseResponseDto } from 'src/common/dto/responses/course-response.dto';
 import { PaginatedCoursesResponseDto } from 'src/common/dto/responses/paginated-courses-response.dto';
 import { EditCourseDto } from './dto/edit_course.dto';
+import { TeacherAssignmentActionDto } from './dto/teacher-assignment-action.dto';
+import { TeacherDashboardResponseDto } from './dto/teacher-dashboard-response.dto';
 import { Res } from '@nestjs/common';
 
 @ApiTags('Courses')
@@ -170,11 +172,43 @@ export class CourseController {
   }
 
   @UseGuards(JwtBlacklistGuard)
+  @Get('my-dashboard')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get teacher dashboard home data',
+    description:
+      'Aggregate payload for the teacher dashboard: welcome, metrics (accepted courses, pending assignments, students, grading queue, unmarked attendance, Google Calendar), recent courses, pending course assignments, grading queue, and recent attendance.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Teacher dashboard data retrieved successfully',
+    type: TeacherDashboardResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only teachers can access this endpoint',
+  })
+  async myDashboard(@Request() req) {
+    if (req.user.role_id !== 2) {
+      throw new UnauthorizedException(
+        'Only teachers can view the teacher dashboard',
+      );
+    }
+
+    return this.courseService.myDashboard(req.user.id);
+  }
+
+  @UseGuards(JwtBlacklistGuard)
   @Get('assign-courses')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ 
-    summary: 'Get my courses for teachers', 
-    description: 'Get paginated list of courses created by the authenticated user. Supports pagination with page and limit parameters.' 
+  @ApiOperation({
+    summary: 'Get my assigned courses (teacher)',
+    description:
+      'List courses assigned to the logged-in teacher. Use status=pending for assignments needing accept/reject, status=accepted for previously accepted courses. Default returns both pending and accepted.',
   })
   @ApiQuery({
     name: 'page',
@@ -190,9 +224,16 @@ export class CourseController {
     description: 'Number of items per page',
     example: 10,
   })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['pending', 'accepted'],
+    description:
+      'Filter by assignment status. pending = needs teacher action, accepted = previously assigned/accepted courses.',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Paginated list of user\'s courses retrieved successfully',
+    description: 'Paginated list of teacher assigned courses',
     type: PaginatedCoursesResponseDto,
   })
   @ApiResponse({
@@ -200,15 +241,67 @@ export class CourseController {
     description: 'Unauthorized - Invalid or missing JWT token',
   })
   @ApiResponse({
-    status: 500,
-    description: 'Internal server error',
+    status: 403,
+    description: 'Forbidden - Only teachers can access this endpoint',
   })
   async getMyCoursesforTeachers(
     @Request() req: any,
     @Query('page') page = 1,
     @Query('limit') limit = 10,
+    @Query('status') status?: 'pending' | 'accepted',
   ) {
-    return this.courseService.getAllCourses(+page, +limit, undefined, undefined, req.user.id.toString());
+    if (req.user.role_id !== 2) {
+      throw new UnauthorizedException('Only teachers can view assigned courses');
+    }
+
+    return this.courseService.getTeacherAssignedCourses(
+      req.user.id,
+      +page,
+      +limit,
+      status,
+    );
+  }
+
+  @UseGuards(JwtBlacklistGuard)
+  @Patch(':courseId/teacher-assignment')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Accept or reject course assignment (teacher, in-app)',
+    description:
+      'Logged-in teacher accepts or rejects a pending course assignment without using the email token. Separate from the email link action endpoints.',
+  })
+  @ApiParam({
+    name: 'courseId',
+    type: Number,
+    description: 'Course ID',
+    example: 1,
+  })
+  @ApiBody({ type: TeacherAssignmentActionDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Assignment accepted or rejected successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Assignment already accepted/rejected' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not assigned to this course / not a teacher' })
+  @ApiResponse({ status: 404, description: 'Course not found' })
+  async respondToTeacherAssignment(
+    @Request() req,
+    @Param('courseId') courseId: number,
+    @Body() dto: TeacherAssignmentActionDto,
+  ) {
+    if (req.user.role_id !== 2) {
+      throw new UnauthorizedException(
+        'Only teachers can respond to course assignments',
+      );
+    }
+
+    return this.courseService.respondToTeacherAssignment(
+      +courseId,
+      req.user.id,
+      dto.action,
+    );
   }
 
   @UseGuards(JwtBlacklistGuard)
