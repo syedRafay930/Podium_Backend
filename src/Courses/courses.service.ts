@@ -3,6 +3,8 @@ import {
   ConflictException,
   UnauthorizedException,
   NotFoundException,
+  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,10 +18,15 @@ import { Lectures } from 'src/Entities/entities/Lectures';
 import { S3Helper } from 'src/S3/s3.helper';
 import { EditCourseDto } from './dto/edit_course.dto';
 import { Assignment } from 'src/Entities/entities/Assignment';
+import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
+import { Attendance } from 'src/Entities/entities/Attendance';
 import { v4 as uuidv4 } from 'uuid';
 import { MailService } from 'src/Nodemailer/mailer.service';
 import { RedisService } from 'src/Auth/redis.service';
+import { AttendanceService } from 'src/Attendance/attendance.service';
+import { GoogleCalendarService } from 'src/GoogleCalendar/google-calendar.service';
+import { AssignmentSubmissionStatus } from 'src/Assignments/dto/assignment-status.enum';
 
 @Injectable()
 export class CourseService {
@@ -38,11 +45,16 @@ export class CourseService {
     private readonly lecturesRepository: Repository<Lectures>,
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
+    @InjectRepository(AssignmentSubmission)
+    private readonly assignmentSubmissionRepository: Repository<AssignmentSubmission>,
     @InjectRepository(Enrollment)
     private readonly enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(Attendance)
+    private readonly attendanceRepository: Repository<Attendance>,
     private readonly mailService: MailService,
     private readonly redisService: RedisService,
     private readonly s3Helper: S3Helper,
+    private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
   async createCourse(courseDto: AddCourseDto, adminId: number, file) {
@@ -401,6 +413,7 @@ export class CourseService {
 
     if (action === 'accept') {
       course.teacherStatus = 'accepted';
+      course.invitationToken = null;
       await this.courseRepository.save(course);
 
       // Delete token from Redis
@@ -426,5 +439,330 @@ export class CourseService {
     } else {
       throw new UnauthorizedException('Invalid action');
     }
+  }
+
+  /* =====================================================
+     TEACHER: ASSIGNED COURSES LIST (PENDING / ACCEPTED)
+     ===================================================== */
+
+  async getTeacherAssignedCourses(
+    teacherId: number,
+    page = 1,
+    limit = 10,
+    status?: 'pending' | 'accepted',
+  ) {
+    const query = this.courseRepository
+      .createQueryBuilder('course')
+      .leftJoin('course.createdBy', 'admin')
+      .addSelect(['admin.id', 'admin.firstName', 'admin.lastName'])
+      .leftJoin('course.courseCategory', 'courseCategory')
+      .addSelect(['courseCategory.id', 'courseCategory.name'])
+      .leftJoin('course.teacher', 'teacher')
+      .addSelect(['teacher.id', 'teacher.firstName', 'teacher.lastName'])
+      .where('teacher.id = :teacherId', { teacherId })
+      .orderBy('course.updatedAt', 'DESC')
+      .addOrderBy('course.createdAt', 'DESC');
+
+    if (status) {
+      query.andWhere('course.teacherStatus = :status', { status });
+    } else {
+      // Default: actionable + previously accepted (reject clears teacher_id)
+      query.andWhere('course.teacherStatus IN (:...statuses)', {
+        statuses: ['pending', 'accepted'],
+      });
+    }
+
+    const total = await query.getCount();
+    query.skip((page - 1) * limit).take(limit);
+
+    const courses = await query.getMany();
+
+    const [pendingCount, acceptedCount] = await Promise.all([
+      this.courseRepository.count({
+        where: { teacher: { id: teacherId }, teacherStatus: 'pending' },
+      }),
+      this.courseRepository.count({
+        where: { teacher: { id: teacherId }, teacherStatus: 'accepted' },
+      }),
+    ]);
+
+    const data = courses.map((course) => {
+      const { invitationToken: _invitationToken, ...safeCourse } = course;
+      return {
+        ...safeCourse,
+        teacherStatus: course.teacherStatus,
+        needsAction: course.teacherStatus === 'pending',
+      };
+    });
+
+    return {
+      data,
+      meta: {
+        totalItems: total,
+        itemCount: data.length,
+        itemsPerPage: limit,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+      },
+      summary: {
+        pending: pendingCount,
+        accepted: acceptedCount,
+        filter: status ?? 'all',
+      },
+    };
+  }
+
+  /* =====================================================
+     TEACHER: ACCEPT / REJECT ASSIGNMENT (JWT IN-APP)
+     ===================================================== */
+
+  async respondToTeacherAssignment(
+    courseId: number,
+    teacherId: number,
+    action: 'accept' | 'reject',
+  ): Promise<{ message: string; courseName: string; teacherStatus: string }> {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+      relations: ['teacher'],
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    if (!course.teacher || course.teacher.id !== teacherId) {
+      throw new ForbiddenException(
+        'You are not assigned to this course',
+      );
+    }
+
+    if (course.teacherStatus !== 'pending') {
+      throw new BadRequestException(
+        `Course assignment is already ${course.teacherStatus}`,
+      );
+    }
+
+    const token = course.invitationToken;
+
+    if (action === 'accept') {
+      course.teacherStatus = 'accepted';
+      course.invitationToken = null;
+      await this.courseRepository.save(course);
+
+      if (token) {
+        await this.redisService.deleteValue(`teacher-invite:${token}`);
+      }
+
+      return {
+        message: 'Course assignment accepted successfully!',
+        courseName: course.courseName,
+        teacherStatus: 'accepted',
+      };
+    }
+
+    if (action === 'reject') {
+      course.teacherStatus = 'rejected';
+      course.teacher = null;
+      course.invitationToken = null;
+      await this.courseRepository.save(course);
+
+      if (token) {
+        await this.redisService.deleteValue(`teacher-invite:${token}`);
+      }
+
+      return {
+        message: 'Course assignment rejected',
+        courseName: course.courseName,
+        teacherStatus: 'rejected',
+      };
+    }
+
+    throw new BadRequestException('Invalid action');
+  }
+
+  /* =====================================================
+     TEACHER: DASHBOARD HOME AGGREGATE
+     ===================================================== */
+
+  async myDashboard(teacherId: number) {
+    const teacher = await this.teacherRepository.findOne({
+      where: { id: teacherId },
+      relations: ['role'],
+    });
+
+    if (!teacher || teacher.isDelete) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    const [
+      acceptedCoursesResult,
+      pendingCoursesResult,
+      recentAttendanceRows,
+      googleStatus,
+      unmarkedAttendanceCount,
+      submissionsToGradeCount,
+    ] = await Promise.all([
+      this.getTeacherAssignedCourses(teacherId, 1, 4, 'accepted'),
+      this.getTeacherAssignedCourses(teacherId, 1, 5, 'pending'),
+      this.attendanceRepository
+        .createQueryBuilder('attendance')
+        .leftJoinAndSelect('attendance.lecture', 'lecture')
+        .leftJoinAndSelect('lecture.course', 'course')
+        .innerJoin('attendance.teacher', 'teacher')
+        .where('teacher.id = :teacherId', { teacherId })
+        .orderBy('attendance.createdAt', 'DESC')
+        .take(5)
+        .getMany(),
+      this.googleCalendarService.getConnectionStatus(teacherId),
+      this.attendanceRepository
+        .createQueryBuilder('attendance')
+        .innerJoin('attendance.teacher', 'teacher')
+        .where('teacher.id = :teacherId', { teacherId })
+        .andWhere('attendance.isMarked = false')
+        .getCount(),
+      this.assignmentSubmissionRepository
+        .createQueryBuilder('submission')
+        .innerJoin('submission.assignment', 'assignment')
+        .innerJoin('assignment.course', 'course')
+        .innerJoin('course.teacher', 'teacher')
+        .where('teacher.id = :teacherId', { teacherId })
+        .andWhere('course.teacherStatus = :accepted', { accepted: 'accepted' })
+        .andWhere('submission.status IN (:...statuses)', {
+          statuses: [
+            AssignmentSubmissionStatus.SUBMITTED,
+            AssignmentSubmissionStatus.LATE,
+          ],
+        })
+        .getCount(),
+    ]);
+
+    const acceptedCourseIds = acceptedCoursesResult.data.map((c) => c.id);
+
+    const enrollmentCounts =
+      acceptedCourseIds.length > 0
+        ? await this.enrollmentRepository
+            .createQueryBuilder('enrollment')
+            .select('enrollment.courseId', 'courseId')
+            .addSelect('COUNT(enrollment.id)', 'count')
+            .where('enrollment.courseId IN (:...courseIds)', {
+              courseIds: acceptedCourseIds,
+            })
+            .andWhere('enrollment.status = :status', { status: 'enrolled' })
+            .groupBy('enrollment.courseId')
+            .getRawMany()
+        : [];
+
+    const enrollmentCountByCourse = new Map<number, number>();
+    for (const row of enrollmentCounts) {
+      enrollmentCountByCourse.set(Number(row.courseId), Number(row.count));
+    }
+
+    const studentsEnrolledCount =
+      acceptedCourseIds.length > 0
+        ? await this.enrollmentRepository
+            .createQueryBuilder('enrollment')
+            .where('enrollment.courseId IN (:...courseIds)', {
+              courseIds: acceptedCourseIds,
+            })
+            .andWhere('enrollment.status = :status', { status: 'enrolled' })
+            .getCount()
+        : 0;
+
+    const gradingQueueRaw =
+      acceptedCourseIds.length > 0
+        ? await this.assignmentSubmissionRepository
+            .createQueryBuilder('submission')
+            .innerJoin('submission.assignment', 'assignment')
+            .innerJoin('assignment.course', 'course')
+            .select('assignment.id', 'assignmentId')
+            .addSelect('assignment.title', 'title')
+            .addSelect('assignment.dueDate', 'dueDate')
+            .addSelect('course.id', 'courseId')
+            .addSelect('course.courseName', 'courseName')
+            .addSelect('COUNT(submission.id)', 'pendingSubmissionCount')
+            .where('course.id IN (:...courseIds)', {
+              courseIds: acceptedCourseIds,
+            })
+            .andWhere('submission.status IN (:...statuses)', {
+              statuses: [
+                AssignmentSubmissionStatus.SUBMITTED,
+                AssignmentSubmissionStatus.LATE,
+              ],
+            })
+            .groupBy('assignment.id')
+            .addGroupBy('assignment.title')
+            .addGroupBy('assignment.dueDate')
+            .addGroupBy('course.id')
+            .addGroupBy('course.courseName')
+            .orderBy('COUNT(submission.id)', 'DESC')
+            .limit(5)
+            .getRawMany()
+        : [];
+
+    const recentCourses = acceptedCoursesResult.data.map((course) => ({
+      courseId: course.id,
+      courseName: course.courseName,
+      coverImg: course.coverImg ?? null,
+      shortDescription: course.shortDescription ?? null,
+      teacherStatus: course.teacherStatus,
+      enrolledStudentsCount: enrollmentCountByCourse.get(course.id) ?? 0,
+    }));
+
+    const pendingCourseAssignments = pendingCoursesResult.data.map(
+      (course) => ({
+        courseId: course.id,
+        courseName: course.courseName,
+        coverImg: course.coverImg ?? null,
+        shortDescription: course.shortDescription ?? null,
+        teacherStatus: course.teacherStatus,
+        needsAction: true,
+        createdAt: course.createdAt ?? null,
+        updatedAt: course.updatedAt ?? null,
+      }),
+    );
+
+    const gradingQueue = gradingQueueRaw.map((row) => ({
+      assignmentId: Number(row.assignmentId),
+      title: row.title,
+      courseId: Number(row.courseId),
+      courseName: row.courseName,
+      dueDate: row.dueDate ?? null,
+      pendingSubmissionCount: Number(row.pendingSubmissionCount),
+    }));
+
+    const recentAttendance = recentAttendanceRows.map((attendance) => ({
+      attendanceId: attendance.id,
+      attendanceDate: attendance.attendanceDate,
+      isMarked: !!attendance.isMarked,
+      lectureTitle: attendance.lecture?.title ?? 'Lecture',
+      lectureId: attendance.lecture?.id ?? null,
+      courseId: attendance.lecture?.course?.id ?? null,
+      courseName: attendance.lecture?.course?.courseName ?? null,
+    }));
+
+    return {
+      welcome: {
+        id: teacher.id,
+        firstName: teacher.firstName,
+        lastName: teacher.lastName,
+        email: teacher.email,
+      },
+      metrics: {
+        acceptedCoursesCount: acceptedCoursesResult.summary.accepted,
+        pendingCourseAssignmentCount: pendingCoursesResult.summary.pending,
+        studentsEnrolledCount,
+        submissionsToGradeCount,
+        unmarkedAttendanceCount,
+        googleCalendarConnected: !!googleStatus.connected,
+      },
+      recentCourses,
+      pendingCourseAssignments,
+      gradingQueue,
+      recentAttendance,
+      googleCalendar: {
+        connected: !!googleStatus.connected,
+        googleEmail: googleStatus.googleEmail ?? null,
+      },
+    };
   }
 }

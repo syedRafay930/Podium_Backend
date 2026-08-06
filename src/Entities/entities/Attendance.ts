@@ -20,6 +20,13 @@ export class Attendance {
   @Column("date", { name: "attendance_date", nullable: true })
   attendanceDate: string | null;
 
+  @Column("boolean", {
+    name: "is_marked",
+    nullable: true,
+    default: () => "false",
+  })
+  isMarked: boolean | null;
+
   @Column("timestamp without time zone", { name: "created_at", nullable: true })
   createdAt: Date | null;
 

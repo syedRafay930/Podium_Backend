@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -229,6 +230,12 @@ export class AttendanceService {
       );
     }
 
+    if (attendance.isMarked) {
+      throw new BadRequestException(
+        'Attendance is already marked and can only be viewed',
+      );
+    }
+
     if (dto.attendanceDate) {
       attendance.attendanceDate = dto.attendanceDate;
     }
@@ -236,9 +243,10 @@ export class AttendanceService {
     attendance.updatedAt = new Date();
     attendance.updatedBy = { id: updatedById } as Users;
 
-    await this.attendanceRepo.save(attendance);
+    const hasMarkPayload =
+      !!dto.presentStudentIds?.length || !!dto.absentStudentIds?.length;
 
-    if (dto.presentStudentIds?.length || dto.absentStudentIds?.length) {
+    if (hasMarkPayload) {
       const details =
         attendance.attendanceDetails ||
         (await this.attendanceDetailsRepo.find({
@@ -273,8 +281,11 @@ export class AttendanceService {
 
       if (updates.length) {
         await this.attendanceDetailsRepo.save(updates);
+        attendance.isMarked = true;
       }
     }
+
+    await this.attendanceRepo.save(attendance);
 
     return this.getAttendanceById(attendanceId, updatedById, 2);
   }

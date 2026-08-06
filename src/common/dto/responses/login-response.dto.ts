@@ -61,5 +61,13 @@ export class LoginResponseDto {
     ]
   })
   sidebar: ModuleDto[];
+
+  @ApiProperty({
+    description:
+      'Whether the logged-in user has an active Google credential with access_token in google_credentials',
+    example: true,
+    type: Boolean,
+  })
+  is_google_connected: boolean;
 }
 

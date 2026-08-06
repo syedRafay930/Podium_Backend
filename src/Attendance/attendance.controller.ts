@@ -206,6 +206,7 @@ export class AttendanceController {
     description: 'Attendance updated successfully',
     type: AttendanceResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Attendance already marked (view only)' })
   @ApiResponse({ status: 403, description: 'Only teacher can update attendance' })
   async updateAttendance(
     @Request() req,

@@ -93,11 +93,15 @@ export class AuthController {
     }
     const token = await this.authService.generateJwtToken(user);
     const sidebar = await this.rbacService.getModulesByRole(user.role.id);
+    const is_google_connected = await this.authService.isGoogleConnected(
+      user.id,
+    );
     return {
       message: 'Login successful',
       access_token: token,
       user,
       sidebar,
+      is_google_connected,
     };
   }
 
@@ -145,11 +149,15 @@ export class AuthController {
 
     const { hashedPassword, ...userWithoutPassword } = user;
     const sidebar = await this.rbacService.getModulesByRole(user.role.id);
+    const is_google_connected = await this.authService.isGoogleConnected(
+      user.id,
+    );
 
     return {
       message: 'Profile retrieved successfully',
       user: userWithoutPassword,
       sidebar,
+      is_google_connected,
     };
   }
 

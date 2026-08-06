@@ -8,12 +8,13 @@ import { ConfigService } from '@nestjs/config';
 import { RedisService } from './redis.service';
 import { MailModule } from 'src/Nodemailer/mailer.module';
 import { Users } from 'src/Entities/entities/Users';
+import { GoogleCredentials } from 'src/Entities/entities/GoogleCredentials';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RBACModule } from '../RBAC/rbac.module';
 import { JwtBlacklistGuard } from './guards/jwt.guards';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Users]),
+    TypeOrmModule.forFeature([Users, GoogleCredentials]),
     forwardRef(() => UsersModule),
     forwardRef(() => RBACModule),
     MailModule,
