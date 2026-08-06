@@ -25,8 +25,10 @@ import {
 import { AttendanceService } from './attendance.service';
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { StudentAttendanceQueryDto } from './dto/student-attendance-query.dto';
 import { AttendanceResponseDto } from 'src/common/dto/responses/attendance-response.dto';
 import { PaginatedAttendanceResponseDto } from 'src/common/dto/responses/paginated-attendance-response.dto';
+import { StudentAttendanceResponseDto } from 'src/common/dto/responses/student-attendance-response.dto';
 
 @ApiTags('Attendance')
 @Controller('attendance')
@@ -67,6 +69,43 @@ export class AttendanceController {
 
     // return this.attendanceService.createAttendance(dto, req.user.id);
     // }
+
+  /* ===================== STUDENT: MY ATTENDANCE ===================== */
+
+  @UseGuards(JwtBlacklistGuard)
+  @Get('me')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get my attendance (student)',
+    description:
+      'Student attendance by lecture. Filter with courseId, then optionally lectureId. Only the authenticated student\'s own records are returned.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Student attendance retrieved successfully',
+    type: StudentAttendanceResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only students can access this endpoint, or not enrolled in course',
+  })
+  async getMyAttendance(
+    @Request() req,
+    @Query() query: StudentAttendanceQueryDto,
+  ) {
+    if (req.user.role_id !== 3) {
+      throw new UnauthorizedException(
+        'Only students can view their attendance',
+      );
+    }
+
+    return this.attendanceService.getMyAttendance(
+      req.user.id,
+      query.courseId ? +query.courseId : undefined,
+      query.lectureId ? +query.lectureId : undefined,
+    );
+  }
 
   /* ===================== GET ALL ATTENDANCE ===================== */
 

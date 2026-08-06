@@ -8,6 +8,7 @@ import {
   UseGuards,
   Request,
   Param,
+  Query,
   HttpCode,
   UseInterceptors,
   UploadedFile,
@@ -31,6 +32,11 @@ import { EnrollmentsService } from './enrollments.service';
 import { EnrollCourseDto } from './dto/enroll-course.dto';
 import { EditEnrollCourseDto } from './dto/edit_enroll-course.dto';
 import { EnrollmentResponseDto } from './dto/enrollment-response.dto';
+import { MyEnrollmentRequestsQueryDto } from './dto/my-enrollment-requests-query.dto';
+import { MyEnrollmentRequestsResponseDto } from './dto/my-enrollment-requests-response.dto';
+import { MyCourseUpdatesQueryDto } from './dto/my-course-updates-query.dto';
+import { MyCourseUpdatesResponseDto } from './dto/my-course-updates-response.dto';
+import { StudentDashboardResponseDto } from './dto/student-dashboard-response.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateEnrollmentStatusDto } from './dto/update-enrollment-status.dto';
 import { Multer } from 'multer';
@@ -182,6 +188,122 @@ export class EnrollmentsController {
     }
 
     return this.enrollmentsService.myEnrolledCourses(req.user.id);
+  }
+
+  @UseGuards(JwtBlacklistGuard)
+  @Get('my-dashboard')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get student dashboard home data',
+    description:
+      'Aggregate payload for the student dashboard home: welcome name, key metrics, recent enrolled courses, pending enrollment requests, recent course material updates, and recent attendance. Real data only (no achievements/campus news).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Student dashboard data retrieved successfully',
+    type: StudentDashboardResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only students can access this endpoint',
+  })
+  async myDashboard(@Request() req) {
+    if (req.user.role_id !== 3) {
+      throw new UnauthorizedException(
+        'Only students can view the student dashboard',
+      );
+    }
+
+    return this.enrollmentsService.myDashboard(req.user.id);
+  }
+
+  @UseGuards(JwtBlacklistGuard)
+  @Get('my-requests')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get my enrollment requests (student)',
+    description:
+      'List all enrollment requests for the authenticated student with current status, course details, and payment/transaction info. Reflects admin approve/reject updates. Optional status filter: pending, enrolled, rejected, dismissed.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Student enrollment requests retrieved successfully',
+    type: MyEnrollmentRequestsResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only students can access this endpoint',
+  })
+  async myEnrollmentRequests(
+    @Request() req,
+    @Query() query: MyEnrollmentRequestsQueryDto,
+  ) {
+    if (req.user.role_id !== 3) {
+      throw new UnauthorizedException(
+        'Only students can view their enrollment requests',
+      );
+    }
+
+    return this.enrollmentsService.myEnrollmentRequests(
+      req.user.id,
+      query.status,
+    );
+  }
+
+  @UseGuards(JwtBlacklistGuard)
+  @Get('my-updates')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get my course material updates (student)',
+    description:
+      'Recent course material uploads across enrolled courses (lectures, assignments, quizzes, resources). Newest first. Not a notification system — pull feed for student Updates tab.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Course material updates retrieved successfully',
+    type: MyCourseUpdatesResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only students, or not enrolled in filtered course',
+  })
+  async myCourseUpdates(
+    @Request() req,
+    @Query() query: MyCourseUpdatesQueryDto,
+  ) {
+    if (req.user.role_id !== 3) {
+      throw new UnauthorizedException(
+        'Only students can view course material updates',
+      );
+    }
+
+    const allowedTypes = ['lecture', 'assignment', 'quiz', 'resource'] as const;
+    const types = query.types
+      ? query.types
+          .split(',')
+          .map((type) => type.trim().toLowerCase())
+          .filter((type): type is (typeof allowedTypes)[number] =>
+            (allowedTypes as readonly string[]).includes(type),
+          )
+      : undefined;
+
+    return this.enrollmentsService.myCourseUpdates(req.user.id, {
+      limit: query.limit ? +query.limit : undefined,
+      courseId: query.courseId ? +query.courseId : undefined,
+      types,
+    });
   }
 
   @UseGuards(JwtBlacklistGuard)

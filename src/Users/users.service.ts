@@ -44,6 +44,13 @@ export class UsersService {
     });
   }
 
+  async findById(id: number): Promise<Users | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+      relations: ['role'],
+    });
+  }
+
   async updatePassword(userEmail: string, newPassword: string): Promise<void> {
     const user = await this.usersRepository.findOne({
       where: { email: userEmail },
