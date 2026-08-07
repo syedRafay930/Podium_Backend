@@ -41,7 +41,7 @@ export class EnrollmentResponseDto {
   @ApiProperty({ 
     description: 'Payment status', 
     example: 'pending', 
-    enum: ['pending', 'paid', 'free'],
+    enum: ['pending', 'paid', 'free', 'failed'],
     type: String 
   })
   paymentStatus: string;
