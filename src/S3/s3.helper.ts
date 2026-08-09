@@ -51,8 +51,7 @@ export class S3Helper {
         Bucket: this.bucket,
         Key: key,
         Body: file.buffer,
-        ContentType: file.mimetype || 'application/octet-stream',
-        ACL: 'public-read',
+        ContentType: file.mimetype || 'application/octet-stream'
       }),
     );
     return { url: this.getFileUrl(key), key };

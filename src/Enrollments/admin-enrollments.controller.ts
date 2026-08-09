@@ -4,6 +4,7 @@ import {
   UseGuards,
   Request,
   Param,
+  Query,
   UnauthorizedException,
   ParseIntPipe,
 } from '@nestjs/common';
@@ -13,10 +14,11 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtBlacklistGuard } from 'src/Auth/guards/jwt.guards';
 import { EnrollmentsService } from './enrollments.service';
-import { EnrollmentResponseDto } from './dto/enrollment-response.dto';
+import { AdminEnrollmentsListResponseDto } from './dto/admin-enrollments-response.dto';
 
 @ApiTags('Admin Enrollments')
 @Controller('admin/enrollments')
@@ -29,12 +31,53 @@ export class AdminEnrollmentsController {
   @ApiOperation({
     summary: 'Get all enrollments (Admin)',
     description:
-      'Get all enrollments in the system. Only accessible by admins (role_id = 1).',
+      'Admin only - Paginated enrollments with student/course/transaction details, filters, and status stats for review (approve/reject).',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['pending', 'enrolled', 'rejected', 'dismissed'],
+    description: 'Filter by enrollment status',
+  })
+  @ApiQuery({
+    name: 'studentName',
+    required: false,
+    type: String,
+    description: 'Search by student full name',
+    example: 'Ali Khan',
+  })
+  @ApiQuery({
+    name: 'courseName',
+    required: false,
+    type: String,
+    description: 'Search by course name',
+    example: 'Web Development',
+  })
+  @ApiQuery({
+    name: 'courseId',
+    required: false,
+    type: Number,
+    description: 'Filter by course ID',
+    example: 3,
   })
   @ApiResponse({
     status: 200,
-    description: 'List of all enrollments retrieved successfully',
-    type: [EnrollmentResponseDto],
+    description: 'List of enrollments retrieved successfully',
+    type: AdminEnrollmentsListResponseDto,
   })
   @ApiResponse({
     status: 401,
@@ -44,14 +87,28 @@ export class AdminEnrollmentsController {
     status: 403,
     description: 'Forbidden - Only admins can access this endpoint',
   })
-  async getAllEnrollments(@Request() req) {
-    const roleId = req.user.role_id;
-
-    if (roleId !== 1) {
+  async getAllEnrollments(
+    @Request() req,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('status')
+    status?: 'pending' | 'enrolled' | 'rejected' | 'dismissed',
+    @Query('studentName') studentName?: string,
+    @Query('courseName') courseName?: string,
+    @Query('courseId') courseId?: number,
+  ) {
+    if (req.user.role_id !== 1) {
       throw new UnauthorizedException('Only admins can view all enrollments');
     }
 
-    return this.enrollmentsService.getAllEnrollments();
+    return this.enrollmentsService.getAllEnrollments(
+      +page,
+      +limit,
+      status,
+      studentName,
+      courseName,
+      courseId ? +courseId : undefined,
+    );
   }
 
   @UseGuards(JwtBlacklistGuard)
@@ -60,7 +117,7 @@ export class AdminEnrollmentsController {
   @ApiOperation({
     summary: 'Get enrollments for a specific course',
     description:
-      'Get all students enrolled in a specific course. Accessible by admins (role_id = 1) and teachers (role_id = 2).',
+      'Get formatted enrollments for a course with payment/transaction info and status stats. Accessible by admins and teachers.',
   })
   @ApiParam({
     name: 'courseId',
@@ -71,7 +128,6 @@ export class AdminEnrollmentsController {
   @ApiResponse({
     status: 200,
     description: 'List of enrollments for the course retrieved successfully',
-    type: [EnrollmentResponseDto],
   })
   @ApiResponse({
     status: 401,

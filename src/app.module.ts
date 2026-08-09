@@ -17,6 +17,7 @@ import { LecturesModule } from './Lectures/lectures.module';
 import { AttendanceModule } from './Attendance/attendance.module';
 import { QuizModule } from './Quiz/quiz.module';
 import { ProgressModule } from './Progress/progress.module';
+import { AdminDashboardModule } from './AdminDashboard/admin-dashboard.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -67,6 +68,7 @@ import { ProgressModule } from './Progress/progress.module';
     AttendanceModule,
     QuizModule,
     ProgressModule,
+    AdminDashboardModule,
   ],
 })
 export class AppModule {}

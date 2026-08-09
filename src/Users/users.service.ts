@@ -7,7 +7,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Admin, Not } from 'typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -15,8 +14,13 @@ import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../Auth/redis.service';
 import { Users } from 'src/Entities/entities/Users';
 import { UserRole } from 'src/Entities/entities/UserRole';
+import { Enrollment } from 'src/Entities/entities/Enrollment';
+import { AttendanceDetails } from 'src/Entities/entities/AttendanceDetails';
+import { Transactions } from 'src/Entities/entities/Transactions';
+import { Courses } from 'src/Entities/entities/Courses';
+import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
+import { Attendance } from 'src/Entities/entities/Attendance';
 import { MailService } from 'src/Nodemailer/mailer.service';
-import { ILike } from 'typeorm';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { EditStudentDto } from './dto/edit-student.dto';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
@@ -30,6 +34,21 @@ export class UsersService {
 
     @InjectRepository(UserRole)
     private readonly userRoleRepository: Repository<UserRole>,
+
+    @InjectRepository(Enrollment)
+    private readonly enrollmentRepository: Repository<Enrollment>,
+
+    @InjectRepository(AttendanceDetails)
+    private readonly attendanceDetailsRepository: Repository<AttendanceDetails>,
+
+    @InjectRepository(Courses)
+    private readonly coursesRepository: Repository<Courses>,
+
+    @InjectRepository(AssignmentSubmission)
+    private readonly assignmentSubmissionRepository: Repository<AssignmentSubmission>,
+
+    @InjectRepository(Attendance)
+    private readonly attendanceRepository: Repository<Attendance>,
 
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -167,37 +186,83 @@ export class UsersService {
   }
 
   async getAllStudents(page: number = 1, limit: number = 10): Promise<any> {
-  const [students, total] = await this.usersRepository.findAndCount({
-    where: { role: { id: 3 }, isDelete: false },
-    relations: ['role'],
-    skip: (page - 1) * limit,
-    take: limit,
-    order: { createdAt: 'DESC' },
-  });
+    const [students, total] = await this.usersRepository.findAndCount({
+      where: { role: { id: 3 }, isDelete: false },
+      relations: ['role'],
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
 
-  const formattedStudents = students.map(student => ({
-    id: student.id,
-    firstName: student.firstName,
-    lastName: student.lastName,
-    email: student.email,
-    contactNumber: student.contactNumber,
-    role: student.role?.roleName || 'Student',
-    rollNumber: student.rollNumber,
-    isActive: student.isActive,
-    createdAt: student.createdAt,
-  }));
+    const formattedStudents = students.map((student) => ({
+      id: student.id,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      email: student.email,
+      contactNumber: student.contactNumber,
+      role: student.role?.roleName || 'Student',
+      rollNumber: student.rollNumber,
+      isActive: student.isActive,
+      createdAt: student.createdAt,
+    }));
 
-  return {
-    data: formattedStudents,
-    meta: {
-      totalItems: total,
-      itemCount: students.length,
-      itemsPerPage: limit,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-    },
-  };
-}
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      activeStudents,
+      inactiveStudents,
+      studentsWithEnrollments,
+      pendingEnrollmentRequests,
+      newStudentsThisMonth,
+    ] = await Promise.all([
+      this.usersRepository.count({
+        where: { role: { id: 3 }, isDelete: false, isActive: true },
+      }),
+      this.usersRepository.count({
+        where: { role: { id: 3 }, isDelete: false, isActive: false },
+      }),
+      this.enrollmentRepository
+        .createQueryBuilder('enrollment')
+        .innerJoin('enrollment.student', 'student')
+        .innerJoin('student.role', 'role')
+        .where('role.id = :roleId', { roleId: 3 })
+        .andWhere('student.isDelete = false')
+        .andWhere('enrollment.status = :status', { status: 'enrolled' })
+        .select('COUNT(DISTINCT enrollment.studentId)', 'count')
+        .getRawOne()
+        .then((row) => Number(row?.count ?? 0)),
+      this.enrollmentRepository.count({
+        where: { status: 'pending' },
+      }),
+      this.usersRepository
+        .createQueryBuilder('user')
+        .innerJoin('user.role', 'role')
+        .where('role.id = :roleId', { roleId: 3 })
+        .andWhere('user.isDelete = false')
+        .andWhere('user.createdAt >= :monthStart', { monthStart })
+        .getCount(),
+    ]);
+
+    return {
+      data: formattedStudents,
+      meta: {
+        totalItems: total,
+        itemCount: students.length,
+        itemsPerPage: limit,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+      },
+      stats: {
+        totalStudents: total,
+        activeStudents,
+        inactiveStudents,
+        studentsWithEnrollments,
+        pendingEnrollmentRequests,
+        newStudentsThisMonth,
+      },
+    };
+  }
 
   async getUserById(userId: number): Promise<Users> {
     const user = await this.usersRepository.findOne({
@@ -210,6 +275,150 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async getStudentById(studentId: number): Promise<any> {
+    const student = await this.usersRepository.findOne({
+      where: { id: studentId, role: { id: 3 }, isDelete: false },
+      relations: ['role'],
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const [enrollments, attendanceDetails] = await Promise.all([
+      this.enrollmentRepository.find({
+        where: { studentId },
+        relations: ['course', 'course.teacher', 'transactions'],
+        order: { createdAt: 'DESC' },
+      }),
+      this.attendanceDetailsRepository
+        .createQueryBuilder('details')
+        .innerJoinAndSelect('details.attendance', 'attendance')
+        .innerJoinAndSelect('attendance.lecture', 'lecture')
+        .innerJoinAndSelect('lecture.course', 'course')
+        .where('details.student_id = :studentId', { studentId })
+        .andWhere('lecture.isDelete = false')
+        .orderBy('attendance.attendanceDate', 'DESC')
+        .addOrderBy('lecture.lectureOrder', 'ASC')
+        .getMany(),
+    ]);
+
+    const enrolledCourses = enrollments.filter(
+      (e) => e.status === 'enrolled',
+    ).length;
+    const pendingEnrollments = enrollments.filter(
+      (e) => e.status === 'pending',
+    ).length;
+    const rejectedEnrollments = enrollments.filter(
+      (e) => e.status === 'rejected',
+    ).length;
+
+    const attendancePresent = attendanceDetails.filter(
+      (d) => d.status?.toLowerCase() === 'present',
+    ).length;
+    const attendanceAbsent = attendanceDetails.filter(
+      (d) => d.status?.toLowerCase() === 'absent',
+    ).length;
+    const marked = attendancePresent + attendanceAbsent;
+    const attendanceRatePercent = marked
+      ? Math.round((attendancePresent / marked) * 1000) / 10
+      : null;
+
+    const transactions = enrollments
+      .map((e) => e.transactions)
+      .filter((t): t is Transactions => !!t);
+
+    const paidTransactions = transactions.filter((t) => t.status === 'paid');
+    const pendingPayments = transactions.filter(
+      (t) => t.status === 'pending',
+    ).length;
+    const failedPayments = transactions.filter(
+      (t) => t.status === 'failed',
+    ).length;
+    const totalPaidAmount = paidTransactions
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0)
+      .toFixed(2);
+
+    return {
+      student: {
+        id: student.id,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        email: student.email,
+        contactNumber: student.contactNumber,
+        rollNumber: student.rollNumber,
+        role: student.role?.roleName || 'Student',
+        isActive: student.isActive,
+        createdAt: student.createdAt,
+        updatedAt: student.updatedAt,
+      },
+      stats: {
+        enrolledCourses,
+        pendingEnrollments,
+        rejectedEnrollments,
+        totalEnrollments: enrollments.length,
+        attendancePresent,
+        attendanceAbsent,
+        attendanceRatePercent,
+        paidTransactions: paidTransactions.length,
+        pendingPayments,
+        failedPayments,
+        totalPaidAmount,
+      },
+      enrollments: enrollments.map((enrollment) => {
+        const teacher = enrollment.course?.teacher
+          ? {
+              id: enrollment.course.teacher.id,
+              firstName: enrollment.course.teacher.firstName,
+              lastName: enrollment.course.teacher.lastName,
+              email: enrollment.course.teacher.email,
+            }
+          : null;
+
+        const txn = enrollment.transactions;
+
+        return {
+          id: enrollment.id,
+          status: enrollment.status,
+          isActive: enrollment.isActive,
+          lectureViewed: enrollment.lectureViewed,
+          rejectionReason: enrollment.rejectionReason,
+          rejectedAt: enrollment.rejectedAt,
+          createdAt: enrollment.createdAt,
+          updatedAt: enrollment.updatedAt,
+          course: enrollment.course
+            ? {
+                id: enrollment.course.id,
+                courseName: enrollment.course.courseName,
+                price: enrollment.course.price,
+                coverImg: enrollment.course.coverImg,
+                teacher,
+              }
+            : null,
+          transaction: txn
+            ? {
+                id: txn.id,
+                amount: txn.amount,
+                status: txn.status,
+                paymentType: txn.paymentType,
+                screenshotUrl: txn.screenshotUrl,
+                createdAt: txn.createdAt,
+                updatedAt: txn.updatedAt,
+              }
+            : null,
+        };
+      }),
+      recentAttendance: attendanceDetails.slice(0, 10).map((detail) => ({
+        attendanceId: detail.attendance.id,
+        attendanceDate: detail.attendance.attendanceDate,
+        status: detail.status,
+        lectureTitle: detail.attendance.lecture?.title ?? null,
+        courseName: detail.attendance.lecture?.course?.courseName ?? null,
+        courseId: detail.attendance.lecture?.course?.id ?? null,
+      })),
+    };
   }
 
   async updateUser(
@@ -389,8 +598,57 @@ export class UsersService {
       order: { createdAt: 'DESC' },
     });
 
+    const formattedTeachers = teachers.map((teacher) => ({
+      id: teacher.id,
+      firstName: teacher.firstName,
+      lastName: teacher.lastName,
+      email: teacher.email,
+      contactNumber: teacher.contactNumber,
+      role: teacher.role?.roleName || 'Teacher',
+      isActive: teacher.isActive,
+      createdAt: teacher.createdAt,
+    }));
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      activeTeachers,
+      inactiveTeachers,
+      teachersWithAcceptedCourses,
+      pendingCourseAssignments,
+      newTeachersThisMonth,
+    ] = await Promise.all([
+      this.usersRepository.count({
+        where: { role: { id: 2 }, isDelete: false, isActive: true },
+      }),
+      this.usersRepository.count({
+        where: { role: { id: 2 }, isDelete: false, isActive: false },
+      }),
+      this.coursesRepository
+        .createQueryBuilder('course')
+        .innerJoin('course.teacher', 'teacher')
+        .innerJoin('teacher.role', 'role')
+        .where('role.id = :roleId', { roleId: 2 })
+        .andWhere('teacher.isDelete = false')
+        .andWhere('course.teacherStatus = :status', { status: 'accepted' })
+        .select('COUNT(DISTINCT teacher.id)', 'count')
+        .getRawOne()
+        .then((row) => Number(row?.count ?? 0)),
+      this.coursesRepository.count({
+        where: { teacherStatus: 'pending' },
+      }),
+      this.usersRepository
+        .createQueryBuilder('user')
+        .innerJoin('user.role', 'role')
+        .where('role.id = :roleId', { roleId: 2 })
+        .andWhere('user.isDelete = false')
+        .andWhere('user.createdAt >= :monthStart', { monthStart })
+        .getCount(),
+    ]);
+
     return {
-      data: teachers,
+      data: formattedTeachers,
       meta: {
         totalItems: total,
         itemCount: teachers.length,
@@ -398,12 +656,20 @@ export class UsersService {
         totalPages: Math.ceil(total / limit),
         currentPage: page,
       },
+      stats: {
+        totalTeachers: total,
+        activeTeachers,
+        inactiveTeachers,
+        teachersWithAcceptedCourses,
+        pendingCourseAssignments,
+        newTeachersThisMonth,
+      },
     };
   }
 
-  async getTeacherById(teacherId: number): Promise<Users> {
+  private async findTeacherEntity(teacherId: number): Promise<Users> {
     const teacher = await this.usersRepository.findOne({
-      where: { id: teacherId, role: { id: 2 } },
+      where: { id: teacherId, role: { id: 2 }, isDelete: false },
       relations: ['role'],
     });
 
@@ -414,12 +680,125 @@ export class UsersService {
     return teacher;
   }
 
+  async getTeacherById(teacherId: number): Promise<any> {
+    const teacher = await this.findTeacherEntity(teacherId);
+
+    const courses = await this.coursesRepository.find({
+      where: { teacher: { id: teacherId } },
+      relations: ['courseCategory'],
+      order: { createdAt: 'DESC' },
+    });
+
+    const acceptedCourses = courses.filter(
+      (c) => c.teacherStatus === 'accepted',
+    );
+    const pendingCourseAssignments = courses.filter(
+      (c) => c.teacherStatus === 'pending',
+    ).length;
+    const acceptedCourseIds = acceptedCourses.map((c) => c.id);
+
+    const [
+      enrollmentCounts,
+      studentsEnrolled,
+      pendingSubmissionsToGrade,
+      unmarkedAttendanceSessions,
+    ] = await Promise.all([
+      acceptedCourseIds.length > 0
+        ? this.enrollmentRepository
+            .createQueryBuilder('enrollment')
+            .select('enrollment.courseId', 'courseId')
+            .addSelect('COUNT(enrollment.id)', 'count')
+            .where('enrollment.courseId IN (:...courseIds)', {
+              courseIds: acceptedCourseIds,
+            })
+            .andWhere('enrollment.status = :status', { status: 'enrolled' })
+            .groupBy('enrollment.courseId')
+            .getRawMany()
+        : Promise.resolve([] as { courseId: string; count: string }[]),
+      acceptedCourseIds.length > 0
+        ? this.enrollmentRepository
+            .createQueryBuilder('enrollment')
+            .where('enrollment.courseId IN (:...courseIds)', {
+              courseIds: acceptedCourseIds,
+            })
+            .andWhere('enrollment.status = :status', { status: 'enrolled' })
+            .getCount()
+        : Promise.resolve(0),
+      acceptedCourseIds.length > 0
+        ? this.assignmentSubmissionRepository
+            .createQueryBuilder('submission')
+            .innerJoin('submission.assignment', 'assignment')
+            .innerJoin('assignment.course', 'course')
+            .where('course.id IN (:...courseIds)', {
+              courseIds: acceptedCourseIds,
+            })
+            .andWhere('submission.status IN (:...statuses)', {
+              statuses: ['submitted', 'late'],
+            })
+            .getCount()
+        : Promise.resolve(0),
+      this.attendanceRepository
+        .createQueryBuilder('attendance')
+        .innerJoin('attendance.teacher', 'teacher')
+        .where('teacher.id = :teacherId', { teacherId })
+        .andWhere('attendance.isMarked = false')
+        .getCount(),
+    ]);
+
+    const enrollmentCountByCourse = new Map<number, number>();
+    for (const row of enrollmentCounts) {
+      enrollmentCountByCourse.set(Number(row.courseId), Number(row.count));
+    }
+
+    return {
+      teacher: {
+        id: teacher.id,
+        firstName: teacher.firstName,
+        lastName: teacher.lastName,
+        email: teacher.email,
+        contactNumber: teacher.contactNumber,
+        role: teacher.role?.roleName || 'Teacher',
+        isActive: teacher.isActive,
+        createdAt: teacher.createdAt,
+        updatedAt: teacher.updatedAt,
+      },
+      stats: {
+        acceptedCourses: acceptedCourses.length,
+        pendingCourseAssignments,
+        totalAssignedCourses: courses.length,
+        studentsEnrolled,
+        pendingSubmissionsToGrade,
+        unmarkedAttendanceSessions,
+      },
+      courses: courses.map((course) => ({
+        id: course.id,
+        courseName: course.courseName,
+        shortDescription: course.shortDescription,
+        price: course.price,
+        coverImg: course.coverImg,
+        isActive: course.isActive,
+        teacherStatus: course.teacherStatus,
+        enrolledStudentsCount:
+          course.teacherStatus === 'accepted'
+            ? (enrollmentCountByCourse.get(course.id) ?? 0)
+            : 0,
+        createdAt: course.createdAt,
+        courseCategory: course.courseCategory
+          ? {
+              id: course.courseCategory.id,
+              name: course.courseCategory.name ?? undefined,
+            }
+          : null,
+      })),
+    };
+  }
+
   async updateTeacher(
     teacherId: number,
     editTeacherDto: EditTeacherDto,
     adminId: number,
   ): Promise<Users> {
-    const teacher = await this.getTeacherById(teacherId);
+    const teacher = await this.findTeacherEntity(teacherId);
 
     // Check if email is being changed and if it already exists
     if (editTeacherDto.email && editTeacherDto.email !== teacher.email) {
@@ -463,7 +842,7 @@ export class UsersService {
     teacherId: number,
     adminId: number,
   ): Promise<{ message: string }> {
-    const teacher = await this.getTeacherById(teacherId);
+    const teacher = await this.findTeacherEntity(teacherId);
 
     teacher.isDelete = true;
     teacher.deletedAt = new Date();

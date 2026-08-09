@@ -8,9 +8,23 @@ import { AuthModule } from '../Auth/auth.module';
 import { MailModule } from 'src/Nodemailer/mailer.module';
 import { Users } from 'src/Entities/entities/Users';
 import { UserRole } from 'src/Entities/entities/UserRole';
+import { Enrollment } from 'src/Entities/entities/Enrollment';
+import { AttendanceDetails } from 'src/Entities/entities/AttendanceDetails';
+import { Courses } from 'src/Entities/entities/Courses';
+import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
+import { Attendance } from 'src/Entities/entities/Attendance';
+
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Users, UserRole]),
+    TypeOrmModule.forFeature([
+      Users,
+      UserRole,
+      Enrollment,
+      AttendanceDetails,
+      Courses,
+      AssignmentSubmission,
+      Attendance,
+    ]),
     JwtModule.register({}),
     RedisModule,
     MailModule,

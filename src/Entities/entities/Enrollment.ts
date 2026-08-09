@@ -49,6 +49,12 @@ export class Enrollment {
   @Column('text', { name: 'rejection_reason', nullable: true })
   rejectionReason: string | null;
 
+  @Column('timestamp without time zone', {
+    name: 'rejected_at',
+    nullable: true,
+  })
+  rejectedAt: Date | null;
+
   @Column('boolean', { name: 'is_active', default: () => 'true' })
   isActive: boolean;
 

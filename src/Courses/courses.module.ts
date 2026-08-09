@@ -7,6 +7,7 @@ import { CourseCategory } from 'src/Entities/entities/CourseCategory';
 import { Lectures } from 'src/Entities/entities/Lectures';
 import { CourseService } from './courses.service';
 import { CourseController } from './courses.controller';
+import { AdminTeacherAssignmentsController } from './admin-teacher-assignments.controller';
 import { AuthModule } from '../Auth/auth.module';
 import { S3Module } from 'src/S3/s3.module';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
@@ -37,7 +38,7 @@ import { GoogleCalendarModule } from 'src/GoogleCalendar/google-calendar.module'
     RedisModule,
     GoogleCalendarModule,
   ],
-  controllers: [CourseController],
+  controllers: [CourseController, AdminTeacherAssignmentsController],
   providers: [CourseService, TemplateService],
   exports: [CourseService],
 })
