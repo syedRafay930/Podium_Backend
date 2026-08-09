@@ -238,6 +238,66 @@ export class QuizDto {
     required: false,
   })
   isCompleted?: boolean;
+
+  @ApiProperty({
+    description: 'Student latest quiz attempt ID (students only)',
+    example: 12,
+    required: false,
+    nullable: true,
+  })
+  attemptId?: number | null;
+
+  @ApiProperty({
+    description: 'Student attempt status (students only)',
+    example: 'submitted',
+    enum: ['missing', 'submitted', 'graded'],
+    required: false,
+  })
+  attemptStatus?: 'missing' | 'submitted' | 'graded';
+
+  @ApiProperty({
+    description: 'Marks obtained on latest attempt when graded (students only)',
+    example: 40,
+    required: false,
+    nullable: true,
+  })
+  marksObtained?: number | null;
+
+  @ApiProperty({
+    description: 'Teacher comments on latest attempt (students only)',
+    example: 'Good work',
+    required: false,
+    nullable: true,
+  })
+  comments?: string | null;
+
+  @ApiProperty({
+    description: 'When the student submitted the latest attempt (students only)',
+    required: false,
+    nullable: true,
+  })
+  submittedAt?: Date | null;
+
+  @ApiProperty({
+    description: 'Total student attempts for this quiz (teachers/admins only)',
+    example: 15,
+    required: false,
+  })
+  attemptCount?: number;
+
+  @ApiProperty({
+    description: 'Ungraded attempts count (teachers/admins only)',
+    example: 3,
+    required: false,
+  })
+  ungradedCount?: number;
+
+  @ApiProperty({
+    description: 'Graded attempts count (teachers/admins only)',
+    example: 12,
+    required: false,
+  })
+  gradedCount?: number;
 }
 
 export class SectionWithContentResponseDto {

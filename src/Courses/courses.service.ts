@@ -114,7 +114,10 @@ export class CourseService {
     search?: string,
     teacherId?: string,
     userId?: number,
+    roleId?: number,
   ) {
+    const isAdmin = roleId === 1;
+
     const query = this.courseRepository
       .createQueryBuilder('course')
       .leftJoin('course.createdBy', 'admin')
@@ -122,7 +125,12 @@ export class CourseService {
       .leftJoin('course.courseCategory', 'courseCategory')
       .addSelect(['courseCategory.id', 'courseCategory.name'])
       .leftJoin('course.teacher', 'teacher')
-      .addSelect(['teacher.id', 'teacher.firstName', 'teacher.lastName'])
+      .addSelect([
+        'teacher.id',
+        'teacher.firstName',
+        'teacher.lastName',
+        'teacher.email',
+      ])
       .addSelect((subQuery) => {
         return subQuery
           .select('AVG(courseRating.rating)', 'avgRating')
@@ -144,7 +152,9 @@ export class CourseService {
       query.andWhere('teacher.id = :teacherId', { teacherId });
     }
 
-    if (userId) {
+    // Catalog behavior: hide already-enrolled courses for students only.
+    // Admins need the full management list.
+    if (userId && roleId === 3) {
       query.andWhere(
         `course.id NOT IN (
           SELECT enrollment.course_id
@@ -158,7 +168,10 @@ export class CourseService {
 
     const total = await query.getCount();
 
-    query.skip((page - 1) * limit).take(limit);
+    query
+      .orderBy('course.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
 
     const { entities, raw } = await query.getRawAndEntities();
     const courses = entities.map((course, idx) => ({
@@ -166,14 +179,128 @@ export class CourseService {
       avgRating: raw[idx].avgRating ? parseFloat(raw[idx].avgRating) : 0,
     }));
 
+    const meta = {
+      totalItems: total,
+      itemCount: courses.length,
+      itemsPerPage: limit,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+    };
+
+    if (!isAdmin) {
+      return { data: courses, meta };
+    }
+
+    const courseIds = courses.map((c) => c.id);
+    const enrollmentCountByCourse = new Map<
+      number,
+      { enrolled: number; pending: number }
+    >();
+
+    if (courseIds.length > 0) {
+      const enrollmentCounts = await this.enrollmentRepository
+        .createQueryBuilder('enrollment')
+        .select('enrollment.courseId', 'courseId')
+        .addSelect(
+          `SUM(CASE WHEN enrollment.status = 'enrolled' THEN 1 ELSE 0 END)`,
+          'enrolled',
+        )
+        .addSelect(
+          `SUM(CASE WHEN enrollment.status = 'pending' THEN 1 ELSE 0 END)`,
+          'pending',
+        )
+        .where('enrollment.courseId IN (:...courseIds)', { courseIds })
+        .groupBy('enrollment.courseId')
+        .getRawMany();
+
+      for (const row of enrollmentCounts) {
+        enrollmentCountByCourse.set(Number(row.courseId), {
+          enrolled: Number(row.enrolled ?? 0),
+          pending: Number(row.pending ?? 0),
+        });
+      }
+    }
+
+    const [
+      activeCourses,
+      inactiveCourses,
+      withTeacher,
+      withoutTeacher,
+      pendingTeacherAssignments,
+      totalEnrolledStudents,
+      pendingEnrollmentRequests,
+    ] = await Promise.all([
+      this.courseRepository.count({ where: { isActive: true } }),
+      this.courseRepository.count({ where: { isActive: false } }),
+      this.courseRepository
+        .createQueryBuilder('course')
+        .where('course.teacher_id IS NOT NULL')
+        .getCount(),
+      this.courseRepository
+        .createQueryBuilder('course')
+        .where('course.teacher_id IS NULL')
+        .getCount(),
+      this.courseRepository.count({ where: { teacherStatus: 'pending' } }),
+      this.enrollmentRepository.count({ where: { status: 'enrolled' } }),
+      this.enrollmentRepository.count({ where: { status: 'pending' } }),
+    ]);
+
+    const data = courses.map((course) => {
+      const counts = enrollmentCountByCourse.get(course.id) ?? {
+        enrolled: 0,
+        pending: 0,
+      };
+
+      return {
+        id: course.id,
+        courseName: course.courseName,
+        shortDescription: course.shortDescription,
+        price: course.price,
+        coverImg: course.coverImg,
+        isActive: course.isActive,
+        teacherStatus: course.teacherStatus,
+        avgRating: course.avgRating,
+        totalLectures: course.totalLectures,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt,
+        enrolledStudentsCount: counts.enrolled,
+        pendingEnrollmentsCount: counts.pending,
+        courseCategory: course.courseCategory
+          ? {
+              id: course.courseCategory.id,
+              name: course.courseCategory.name,
+            }
+          : null,
+        teacher: course.teacher
+          ? {
+              id: course.teacher.id,
+              firstName: course.teacher.firstName,
+              lastName: course.teacher.lastName,
+              email: course.teacher.email,
+            }
+          : null,
+        createdBy: course.createdBy
+          ? {
+              id: course.createdBy.id,
+              firstName: course.createdBy.firstName,
+              lastName: course.createdBy.lastName,
+            }
+          : null,
+      };
+    });
+
     return {
-      data: courses,
-      meta: {
-        totalItems: total,
-        itemCount: courses.length,
-        itemsPerPage: limit,
-        totalPages: Math.ceil(total / limit),
-        currentPage: page,
+      data,
+      meta,
+      stats: {
+        totalCourses: total,
+        activeCourses,
+        inactiveCourses,
+        withTeacher,
+        withoutTeacher,
+        pendingTeacherAssignments,
+        totalEnrolledStudents,
+        pendingEnrollmentRequests,
       },
     };
   }
@@ -424,8 +551,8 @@ export class CourseService {
         courseName: course.courseName,
       };
     } else if (action === 'reject') {
+      // Keep teacher linked so admin can see who rejected and reassign
       course.teacherStatus = 'rejected';
-      course.teacher = null;
       course.invitationToken = null;
       await this.courseRepository.save(course);
 
@@ -439,6 +566,132 @@ export class CourseService {
     } else {
       throw new UnauthorizedException('Invalid action');
     }
+  }
+
+  /* =====================================================
+     ADMIN: TEACHER ASSIGNMENTS QUEUE
+     ===================================================== */
+
+  async getAdminTeacherAssignments(
+    page: number = 1,
+    limit: number = 10,
+    status?: 'pending' | 'accepted' | 'rejected' | 'unassigned',
+    teacherName?: string,
+    courseName?: string,
+    teacherId?: number,
+  ) {
+    const query = this.courseRepository
+      .createQueryBuilder('course')
+      .leftJoinAndSelect('course.teacher', 'teacher')
+      .leftJoinAndSelect('course.courseCategory', 'courseCategory')
+      .orderBy('course.updatedAt', 'DESC')
+      .addOrderBy('course.createdAt', 'DESC');
+
+    if (status === 'unassigned') {
+      query.andWhere('course.teacher_id IS NULL');
+    } else if (status) {
+      query
+        .andWhere('course.teacher_id IS NOT NULL')
+        .andWhere('course.teacherStatus = :status', { status });
+    }
+
+    if (teacherId) {
+      query.andWhere('teacher.id = :teacherId', { teacherId });
+    }
+
+    if (teacherName) {
+      query.andWhere(
+        "CONCAT(teacher.firstName, ' ', teacher.lastName) ILIKE :teacherName",
+        { teacherName: `%${teacherName}%` },
+      );
+    }
+
+    if (courseName) {
+      query.andWhere('course.courseName ILIKE :courseName', {
+        courseName: `%${courseName}%`,
+      });
+    }
+
+    const total = await query.getCount();
+    query.skip((page - 1) * limit).take(limit);
+    const courses = await query.getMany();
+
+    const [pending, accepted, rejected, unassigned, totalAll] =
+      await Promise.all([
+        this.courseRepository
+          .createQueryBuilder('course')
+          .where('course.teacher_id IS NOT NULL')
+          .andWhere('course.teacherStatus = :status', { status: 'pending' })
+          .getCount(),
+        this.courseRepository
+          .createQueryBuilder('course')
+          .where('course.teacher_id IS NOT NULL')
+          .andWhere('course.teacherStatus = :status', { status: 'accepted' })
+          .getCount(),
+        this.courseRepository
+          .createQueryBuilder('course')
+          .where('course.teacher_id IS NOT NULL')
+          .andWhere('course.teacherStatus = :status', { status: 'rejected' })
+          .getCount(),
+        this.courseRepository
+          .createQueryBuilder('course')
+          .where('course.teacher_id IS NULL')
+          .getCount(),
+        this.courseRepository.count(),
+      ]);
+
+    const data = courses.map((course) => {
+      const assignmentStatus: 'pending' | 'accepted' | 'rejected' | 'unassigned' =
+        !course.teacher
+          ? 'unassigned'
+          : (course.teacherStatus as 'pending' | 'accepted' | 'rejected');
+
+      return {
+        courseId: course.id,
+        courseName: course.courseName,
+        shortDescription: course.shortDescription,
+        price: course.price,
+        coverImg: course.coverImg,
+        isActive: course.isActive,
+        assignmentStatus,
+        needsAction: assignmentStatus === 'pending',
+        teacher: course.teacher
+          ? {
+              id: course.teacher.id,
+              firstName: course.teacher.firstName,
+              lastName: course.teacher.lastName,
+              email: course.teacher.email,
+              contactNumber: course.teacher.contactNumber,
+            }
+          : null,
+        courseCategory: course.courseCategory
+          ? {
+              id: course.courseCategory.id,
+              name: course.courseCategory.name,
+            }
+          : null,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt,
+      };
+    });
+
+    return {
+      data,
+      meta: {
+        totalItems: total,
+        itemCount: data.length,
+        itemsPerPage: limit,
+        totalPages: Math.ceil(total / limit) || 0,
+        currentPage: page,
+      },
+      stats: {
+        total: totalAll,
+        pending,
+        accepted,
+        rejected,
+        unassigned,
+      },
+    };
   }
 
   /* =====================================================
@@ -466,7 +719,7 @@ export class CourseService {
     if (status) {
       query.andWhere('course.teacherStatus = :status', { status });
     } else {
-      // Default: actionable + previously accepted (reject clears teacher_id)
+      // Default: actionable + previously accepted (rejected kept for admin history)
       query.andWhere('course.teacherStatus IN (:...statuses)', {
         statuses: ['pending', 'accepted'],
       });
@@ -561,8 +814,8 @@ export class CourseService {
     }
 
     if (action === 'reject') {
+      // Keep teacher linked so admin can see who rejected and reassign
       course.teacherStatus = 'rejected';
-      course.teacher = null;
       course.invitationToken = null;
       await this.courseRepository.save(course);
 

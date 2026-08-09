@@ -232,7 +232,7 @@ export class CourseManagementController {
   @ApiOperation({
     summary: 'Get course by ID with all content',
     description:
-      'Get complete course details with sections grouped by content (assignments, lectures, resources). For teachers and admins, includes enrollment list. For students, includes only course structure and content.',
+      'Get complete course details with sections grouped by content (assignments, lectures, resources, quizzes). Teachers/admins get enrollments + content stats. Admins also get pending/rejected enrollments and enrollment breakdown stats. Students get course structure/content only.',
   })
   @ApiParam({
     name: 'courseId',
@@ -245,10 +245,28 @@ export class CourseManagementController {
     description: 'Course with content retrieved successfully',
     schema: {
       example: {
-        course: { id: 1, title: 'Course Title', teacher: {} },
+        course: {
+          id: 1,
+          courseName: 'Course Title',
+          teacherStatus: 'accepted',
+          teacher: {},
+        },
         sections: [],
-        enrollments: [], // Only for admin/teacher
-        enrollmentCount: 0, // Only for admin/teacher
+        stats: {
+          enrolledCount: 10,
+          pendingCount: 2,
+          rejectedCount: 1,
+          totalEnrollments: 13,
+          sectionCount: 4,
+          lectureCount: 12,
+          assignmentCount: 5,
+          quizCount: 3,
+          resourceCount: 6,
+        },
+        enrollments: [],
+        pendingEnrollments: [],
+        rejectedEnrollments: [],
+        enrollmentCount: 10,
       },
     },
   })

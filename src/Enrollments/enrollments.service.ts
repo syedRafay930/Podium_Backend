@@ -26,6 +26,8 @@ import { AttendanceService } from 'src/Attendance/attendance.service';
 
 type CourseUpdateType = 'lecture' | 'assignment' | 'quiz' | 'resource';
 
+const REAPPLY_COOLDOWN_MS = 48 * 60 * 60 * 1000;
+
 @Injectable()
 export class EnrollmentsService {
   constructor(
@@ -56,18 +58,8 @@ export class EnrollmentsService {
     enrollment: Enrollment,
     action: EnrollmentAction,
   ) {
-    if (
-      action === EnrollmentAction.REJECT &&
-      enrollment.transactions?.screenshotUrl
-    ) {
-      try {
-        const urlParts =
-          enrollment.transactions.screenshotUrl.split('.amazonaws.com/');
-        if (urlParts[1]) await this.s3Helper.deleteFile(urlParts[1]);
-      } catch (error) {
-        console.error('Failed to delete screenshot from S3:', error);
-      }
-    }
+    // Keep payment screenshot on reject for admin review / audit history.
+    // Re-request overwrites screenshotUrl with a new upload when applicable.
 
     const template =
       action === EnrollmentAction.APPROVE
@@ -191,11 +183,17 @@ export class EnrollmentsService {
 
       const txn = enrollment.transactions;
 
+      const { canReapply, reapplyAvailableAt } =
+        this.getReapplyAvailability(enrollment);
+
       return {
         id: enrollment.id,
         status: enrollment.status,
         isActive: enrollment.isActive,
         rejectionReason: enrollment.rejectionReason,
+        rejectedAt: enrollment.rejectedAt,
+        canReapply,
+        reapplyAvailableAt,
         createdAt: enrollment.createdAt,
         updatedAt: enrollment.updatedAt,
         course: enrollment.course
@@ -549,15 +547,78 @@ export class EnrollmentsService {
     };
   }
 
-  async getAllEnrollments(): Promise<Enrollment[]> {
-    return this.enrollmentRepository.find({
-      relations: ['student', 'course', 'enrolledBy'],
-      order: { createdAt: 'DESC' },
-    });
+  async getAllEnrollments(
+    page: number = 1,
+    limit: number = 10,
+    status?: 'pending' | 'enrolled' | 'rejected' | 'dismissed',
+    studentName?: string,
+    courseName?: string,
+    courseId?: number,
+  ) {
+    const query = this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .leftJoinAndSelect('enrollment.student', 'student')
+      .leftJoinAndSelect('enrollment.course', 'course')
+      .leftJoinAndSelect('enrollment.enrolledBy', 'enrolledBy')
+      .leftJoinAndSelect('enrollment.transactions', 'transactions')
+      .orderBy('enrollment.createdAt', 'DESC');
+
+    if (status) {
+      query.andWhere('enrollment.status = :status', { status });
+    }
+
+    if (courseId) {
+      query.andWhere('enrollment.courseId = :courseId', { courseId });
+    }
+
+    if (studentName) {
+      query.andWhere(
+        "CONCAT(student.firstName, ' ', student.lastName) ILIKE :studentName",
+        { studentName: `%${studentName}%` },
+      );
+    }
+
+    if (courseName) {
+      query.andWhere('course.courseName ILIKE :courseName', {
+        courseName: `%${courseName}%`,
+      });
+    }
+
+    const total = await query.getCount();
+    query.skip((page - 1) * limit).take(limit);
+    const enrollments = await query.getMany();
+
+    const [pending, enrolled, rejected, dismissed, totalAll] =
+      await Promise.all([
+        this.enrollmentRepository.count({ where: { status: 'pending' } }),
+        this.enrollmentRepository.count({ where: { status: 'enrolled' } }),
+        this.enrollmentRepository.count({ where: { status: 'rejected' } }),
+        this.enrollmentRepository.count({ where: { status: 'dismissed' } }),
+        this.enrollmentRepository.count(),
+      ]);
+
+    return {
+      data: enrollments.map((enrollment) =>
+        this.mapAdminEnrollmentItem(enrollment),
+      ),
+      meta: {
+        totalItems: total,
+        itemCount: enrollments.length,
+        itemsPerPage: limit,
+        totalPages: Math.ceil(total / limit) || 0,
+        currentPage: page,
+      },
+      stats: {
+        total: totalAll,
+        pending,
+        enrolled,
+        rejected,
+        dismissed,
+      },
+    };
   }
 
-  async studentsInCourse(courseId: number): Promise<Enrollment[]> {
-    // Verify course exists
+  async studentsInCourse(courseId: number) {
     const course = await this.courseRepository.findOne({
       where: { id: courseId },
     });
@@ -566,11 +627,90 @@ export class EnrollmentsService {
       throw new NotFoundException('Course not found');
     }
 
-    return this.enrollmentRepository.find({
+    const enrollments = await this.enrollmentRepository.find({
       where: { courseId },
-      relations: ['student', 'enrolledBy'],
+      relations: ['student', 'enrolledBy', 'course', 'transactions'],
       order: { createdAt: 'DESC' },
     });
+
+    const stats = {
+      total: enrollments.length,
+      pending: enrollments.filter((e) => e.status === 'pending').length,
+      enrolled: enrollments.filter((e) => e.status === 'enrolled').length,
+      rejected: enrollments.filter((e) => e.status === 'rejected').length,
+      dismissed: enrollments.filter((e) => e.status === 'dismissed').length,
+    };
+
+    return {
+      course: {
+        id: course.id,
+        courseName: course.courseName,
+        price: course.price,
+        coverImg: course.coverImg,
+      },
+      data: enrollments.map((enrollment) =>
+        this.mapAdminEnrollmentItem(enrollment),
+      ),
+      stats,
+    };
+  }
+
+  private mapAdminEnrollmentItem(enrollment: Enrollment) {
+    const student = enrollment.student
+      ? {
+          id: enrollment.student.id,
+          firstName: enrollment.student.firstName,
+          lastName: enrollment.student.lastName,
+          email: enrollment.student.email,
+          rollNumber: enrollment.student.rollNumber,
+          contactNumber: enrollment.student.contactNumber,
+        }
+      : null;
+
+    const course = enrollment.course
+      ? {
+          id: enrollment.course.id,
+          courseName: enrollment.course.courseName,
+          price: enrollment.course.price,
+          coverImg: enrollment.course.coverImg,
+        }
+      : null;
+
+    const txn = enrollment.transactions;
+    const enrolledBy = enrollment.enrolledBy
+      ? {
+          id: enrollment.enrolledBy.id,
+          firstName: enrollment.enrolledBy.firstName,
+          lastName: enrollment.enrolledBy.lastName,
+          email: enrollment.enrolledBy.email,
+        }
+      : null;
+
+    return {
+      id: enrollment.id,
+      status: enrollment.status,
+      isActive: enrollment.isActive,
+      lectureViewed: enrollment.lectureViewed,
+      rejectionReason: enrollment.rejectionReason,
+      rejectedAt: enrollment.rejectedAt,
+      createdAt: enrollment.createdAt,
+      updatedAt: enrollment.updatedAt,
+      student,
+      course,
+      transaction: txn
+        ? {
+            id: txn.id,
+            uuid: txn.uuid,
+            amount: txn.amount,
+            status: txn.status,
+            paymentType: txn.paymentType,
+            screenshotUrl: txn.screenshotUrl,
+            createdAt: txn.createdAt,
+            updatedAt: txn.updatedAt,
+          }
+        : null,
+      enrolledBy,
+    };
   }
 
   async checkEnrollment(
@@ -702,12 +842,45 @@ export class EnrollmentsService {
     });
     if (!student) throw new NotFoundException('Student not found');
 
-    // Check existing active enrollment
     const existing = await this.enrollmentRepository.findOne({
-      where: { studentId, courseId, isActive: true },
+      where: { studentId, courseId },
+      relations: ['transactions'],
     });
-    if (existing)
-      throw new ConflictException('Student is already enrolled in this course');
+
+    if (existing) {
+      if (existing.status === 'enrolled') {
+        throw new ConflictException(
+          'Student is already enrolled in this course',
+        );
+      }
+
+      if (existing.status === 'pending') {
+        throw new ConflictException(
+          'Enrollment request for this course is already pending',
+        );
+      }
+
+      if (existing.status === 'rejected') {
+        const { canReapply, reapplyAvailableAt } =
+          this.getReapplyAvailability(existing);
+        if (!canReapply) {
+          const hoursLeft = Math.max(
+            1,
+            Math.ceil(
+              ((reapplyAvailableAt?.getTime() ?? Date.now()) - Date.now()) /
+                (60 * 60 * 1000),
+            ),
+          );
+          throw new BadRequestException(
+            `Your previous enrollment request was rejected. You can request again in ${hoursLeft} hour(s).`,
+          );
+        }
+      } else {
+        throw new ConflictException(
+          'An enrollment record already exists for this course',
+        );
+      }
+    }
 
     const coursePrice = course.price ? parseFloat(course.price) : 0;
     const isFree = coursePrice === 0 || course.price === null;
@@ -721,41 +894,83 @@ export class EnrollmentsService {
 
     // Upload screenshot if provided
     let screenshotUrl: string | null = null;
-    let screenshotKey: string | null = null;
     if (screenshot) {
       const uploaded = await this.s3Helper.uploadFile(
         screenshot,
         'enrollments/screenshots',
       );
       screenshotUrl = uploaded.url;
-      screenshotKey = uploaded.key;
     }
 
-    const enrollment = this.enrollmentRepository.create({
-      studentId,
-      courseId,
-      enrolledBy: studentId as any,
-      lectureViewed: 0,
-      status: isFree ? 'enrolled' : 'pending',
-      isActive: true,
-      createdAt: new Date(),
-    });
-    const savedEnrollment = await this.enrollmentRepository.save(enrollment);
+    const now = new Date();
+    let savedEnrollment: Enrollment;
 
-    const transaction = this.transactionRepository.create({
-      uuid: `txn_${Date.now().toString(36)}`,
-      enrollId: savedEnrollment.id,
-      amount: course.price || '0',
-      status: isFree ? 'free' : 'pending',
-      paymentType: isFree ? null : 'online',
-      screenshotUrl,
-      createdAt: new Date(),
-    });
-    await this.transactionRepository.save(transaction);
+    if (existing?.status === 'rejected') {
+      // Reuse the same enrollment + transaction after cooldown
+      existing.status = isFree ? 'enrolled' : 'pending';
+      existing.isActive = true;
+      existing.rejectionReason = null;
+      existing.rejectedAt = null;
+      existing.enrolledBy = studentId as any;
+      existing.updatedAt = now;
+      savedEnrollment = await this.enrollmentRepository.save(existing);
+
+      const txn =
+        existing.transactions ||
+        (await this.transactionRepository.findOne({
+          where: { enrollId: savedEnrollment.id },
+        }));
+
+      if (txn) {
+        txn.amount = course.price || '0';
+        txn.status = isFree ? 'free' : 'pending';
+        txn.paymentType = isFree ? null : 'online';
+        txn.screenshotUrl = screenshotUrl;
+        txn.updatedAt = now;
+        await this.transactionRepository.save(txn);
+      } else {
+        await this.transactionRepository.save(
+          this.transactionRepository.create({
+            uuid: `txn_${Date.now().toString(36)}`,
+            enrollId: savedEnrollment.id,
+            amount: course.price || '0',
+            status: isFree ? 'free' : 'pending',
+            paymentType: isFree ? null : 'online',
+            screenshotUrl,
+            createdAt: now,
+          }),
+        );
+      }
+    } else {
+      const enrollment = this.enrollmentRepository.create({
+        studentId,
+        courseId,
+        enrolledBy: studentId as any,
+        lectureViewed: 0,
+        status: isFree ? 'enrolled' : 'pending',
+        isActive: true,
+        rejectionReason: null,
+        rejectedAt: null,
+        createdAt: now,
+      });
+      savedEnrollment = await this.enrollmentRepository.save(enrollment);
+
+      await this.transactionRepository.save(
+        this.transactionRepository.create({
+          uuid: `txn_${Date.now().toString(36)}`,
+          enrollId: savedEnrollment.id,
+          amount: course.price || '0',
+          status: isFree ? 'free' : 'pending',
+          paymentType: isFree ? null : 'online',
+          screenshotUrl,
+          createdAt: now,
+        }),
+      );
+    }
 
     // Email — free course direct confirmation, paid course "pending review"
     try {
-      const enrollmentDate = new Date().toLocaleDateString('en-US', {
+      const enrollmentDate = now.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -814,6 +1029,8 @@ export class EnrollmentsService {
       if (dto.action === EnrollmentAction.APPROVE) {
         // 1. Update Enrollment
         enrollment.status = 'enrolled';
+        enrollment.rejectedAt = null;
+        enrollment.rejectionReason = null;
         enrollment.updatedAt = updatedAt;
         await transactionalEntityManager.save(enrollment);
 
@@ -828,6 +1045,7 @@ export class EnrollmentsService {
         enrollment.status = 'rejected';
         enrollment.isActive = false;
         enrollment.rejectionReason = dto.rejectionReason || null;
+        enrollment.rejectedAt = updatedAt;
         enrollment.updatedAt = updatedAt;
         await transactionalEntityManager.save(enrollment);
 
@@ -846,5 +1064,29 @@ export class EnrollmentsService {
     );
 
     return enrollment;
+  }
+
+  private getReapplyAvailability(enrollment: Enrollment): {
+    canReapply: boolean;
+    reapplyAvailableAt: Date | null;
+  } {
+    if (enrollment.status !== 'rejected') {
+      return { canReapply: false, reapplyAvailableAt: null };
+    }
+
+    const rejectedAt =
+      enrollment.rejectedAt ?? enrollment.updatedAt ?? enrollment.createdAt;
+    if (!rejectedAt) {
+      return { canReapply: true, reapplyAvailableAt: null };
+    }
+
+    const rejectedTime = new Date(rejectedAt).getTime();
+    const reapplyAvailableAt = new Date(rejectedTime + REAPPLY_COOLDOWN_MS);
+    const canReapply = Date.now() >= reapplyAvailableAt.getTime();
+
+    return {
+      canReapply,
+      reapplyAvailableAt: canReapply ? null : reapplyAvailableAt,
+    };
   }
 }

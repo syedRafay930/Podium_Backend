@@ -9,7 +9,11 @@ import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { StudentLectureProgress } from 'src/Entities/entities/StudentLectureProgress';
 import { AttendanceDetails } from 'src/Entities/entities/AttendanceDetails';
 import { ProgressService } from './progress.service';
+import { ProgressController } from './progress.controller';
 import { AuthModule } from 'src/Auth/auth.module';
+import { Courses } from 'src/Entities/entities/Courses';
+import { Users } from 'src/Entities/entities/Users';
+import { Sections } from 'src/Entities/entities/Sections';
 
 @Module({
   imports: [
@@ -22,9 +26,13 @@ import { AuthModule } from 'src/Auth/auth.module';
       Enrollment,
       StudentLectureProgress,
       AttendanceDetails,
+      Courses,
+      Users,
+      Sections,
     ]),
     AuthModule,
   ],
+  controllers: [ProgressController],
   providers: [ProgressService],
   exports: [ProgressService],
 })

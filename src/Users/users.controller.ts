@@ -29,6 +29,10 @@ import { CreateStudentDto } from './dto/create-student.dto';
 import { EditStudentDto } from './dto/edit-student.dto';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { EditTeacherDto } from './dto/edit-teacher.dto';
+import { AdminStudentsListResponseDto } from './dto/admin-students-response.dto';
+import { AdminStudentDetailResponseDto } from './dto/admin-student-detail-response.dto';
+import { AdminTeachersListResponseDto } from './dto/admin-teachers-response.dto';
+import { AdminTeacherDetailResponseDto } from './dto/admin-teacher-detail-response.dto';
 
 @ApiTags('Admin - Users Management')
 @Controller('admin/users')
@@ -147,7 +151,8 @@ export class UsersController {
   @Get('students')
   @ApiOperation({
     summary: 'Get all students',
-    description: 'Admin only - Get paginated list of all students',
+    description:
+      'Admin only - Get paginated list of all students with list stats for dashboard cards',
   })
   @ApiQuery({
     name: 'page',
@@ -166,6 +171,7 @@ export class UsersController {
   @ApiResponse({
     status: 200,
     description: 'List of students retrieved successfully',
+    type: AdminStudentsListResponseDto,
   })
   @ApiResponse({
     status: 401,
@@ -190,9 +196,9 @@ export class UsersController {
 
   @Get('students/:studentId')
   @ApiOperation({
-    summary: 'Get student by ID',
+    summary: 'Get student profile by ID',
     description:
-      'Admin only - Get detailed information about a specific student',
+      'Admin only - Get student profile with enrollments, payments, attendance summary, and recent attendance',
   })
   @ApiParam({
     name: 'studentId',
@@ -203,6 +209,7 @@ export class UsersController {
   @ApiResponse({
     status: 200,
     description: 'Student details retrieved successfully',
+    type: AdminStudentDetailResponseDto,
   })
   @ApiResponse({
     status: 401,
@@ -225,7 +232,7 @@ export class UsersController {
       throw new UnauthorizedException('Only admins can view student details');
     }
 
-    return this.usersService.getUserById(studentId);
+    return this.usersService.getStudentById(studentId);
   }
 
   @Delete('students/:studentId')
@@ -316,7 +323,8 @@ export class UsersController {
   @Get('teachers')
   @ApiOperation({
     summary: 'Get all teachers',
-    description: 'Admin only - Get paginated list of all teachers',
+    description:
+      'Admin only - Get paginated list of all teachers with list stats for dashboard cards',
   })
   @ApiQuery({
     name: 'page',
@@ -335,6 +343,7 @@ export class UsersController {
   @ApiResponse({
     status: 200,
     description: 'List of teachers retrieved successfully',
+    type: AdminTeachersListResponseDto,
   })
   @ApiResponse({
     status: 401,
@@ -359,9 +368,9 @@ export class UsersController {
 
   @Get('teachers/:teacherId')
   @ApiOperation({
-    summary: 'Get teacher by ID',
+    summary: 'Get teacher profile by ID',
     description:
-      'Admin only - Get detailed information about a specific teacher',
+      'Admin only - Get teacher profile with assigned courses, enrollment counts, and workload stats',
   })
   @ApiParam({
     name: 'teacherId',
@@ -372,6 +381,7 @@ export class UsersController {
   @ApiResponse({
     status: 200,
     description: 'Teacher details retrieved successfully',
+    type: AdminTeacherDetailResponseDto,
   })
   @ApiResponse({
     status: 401,

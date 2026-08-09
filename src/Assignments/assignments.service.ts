@@ -668,6 +668,10 @@ export class AssignmentsService {
           submission?.submissionFile || null,
         );
 
+        const isGraded =
+          submission?.status === AssignmentSubmissionStatus.GRADED ||
+          submission?.marksObtained != null;
+
         return {
           studentId: enrollment.student.id,
           firstName: enrollment.student.firstName,
@@ -676,6 +680,8 @@ export class AssignmentsService {
           submittedAt: submission?.submittedAt || null,
           submissionFiles: submissionFiles,
           status: submission?.status || AssignmentSubmissionStatus.MISSING,
+          marksObtained: isGraded ? submission?.marksObtained ?? null : null,
+          comments: isGraded ? submission?.comments ?? null : null,
         };
       },
     );

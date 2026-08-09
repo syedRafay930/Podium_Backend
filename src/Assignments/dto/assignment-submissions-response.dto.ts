@@ -36,6 +36,22 @@ export class StudentSubmissionDto {
     enum: ['missing', 'submitted', 'graded', 'late'],
   })
   status: string;
+
+  @ApiProperty({
+    description: 'Marks obtained when the submission is graded; null otherwise',
+    example: 85,
+    required: false,
+    nullable: true,
+  })
+  marksObtained: number | null;
+
+  @ApiProperty({
+    description: 'Grader comments when graded; null otherwise',
+    example: 'Well done',
+    required: false,
+    nullable: true,
+  })
+  comments: string | null;
 }
 
 export class PaginatedSubmissionsResponseDto {

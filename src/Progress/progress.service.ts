@@ -473,4 +473,226 @@ export class ProgressService {
 
     return Number(result?.count) || 0;
   }
+
+  /* =====================================================
+     STUDENT: COURSE MARKSHEET (ASSIGNMENTS + QUIZZES)
+     ===================================================== */
+
+  async getCourseMarksheet(studentId: number, courseId: number) {
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: {
+        studentId,
+        courseId,
+        status: 'enrolled',
+        isActive: true,
+      },
+      relations: ['student', 'course'],
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException(
+        'You must be enrolled in this course to view the marksheet',
+      );
+    }
+
+    if (!enrollment.course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const [assignments, quizzes, submissions, attempts] = await Promise.all([
+      this.assignmentRepository.find({
+        where: { course: { id: courseId } },
+        relations: ['section'],
+        order: { createdAt: 'ASC' },
+      }),
+      this.quizRepository.find({
+        where: {
+          course_id: courseId,
+          isDelete: false,
+          isPublished: true,
+        },
+        relations: ['section'],
+        order: { createdAt: 'ASC' },
+      }),
+      this.assignmentSubmissionRepository.find({
+        where: {
+          student: { id: studentId },
+          assignment: { course: { id: courseId } },
+        },
+        relations: ['assignment'],
+      }),
+      this.quizAttemptsRepository
+        .createQueryBuilder('attempt')
+        .innerJoinAndSelect('attempt.quiz', 'quiz')
+        .innerJoin('attempt.student', 'student')
+        .where('student.id = :studentId', { studentId })
+        .andWhere('quiz.course_id = :courseId', { courseId })
+        .andWhere('quiz.isDelete = false')
+        .andWhere('quiz.isPublished = true')
+        .orderBy('attempt.submittedAt', 'DESC')
+        .addOrderBy('attempt.id', 'DESC')
+        .getMany(),
+    ]);
+
+    const submissionByAssignmentId = new Map<number, AssignmentSubmission>();
+    for (const submission of submissions) {
+      if (submission.assignment?.id) {
+        submissionByAssignmentId.set(submission.assignment.id, submission);
+      }
+    }
+
+    const latestAttemptByQuizId = new Map<number, QuizAttempts>();
+    for (const attempt of attempts) {
+      const quizId = attempt.quiz?.id;
+      if (!quizId || latestAttemptByQuizId.has(quizId)) continue;
+      latestAttemptByQuizId.set(quizId, attempt);
+    }
+
+    const assignmentRows = assignments.map((assignment) => {
+      const submission = submissionByAssignmentId.get(assignment.id);
+      const status = submission?.status || 'missing';
+      const isGraded =
+        status === 'graded' || submission?.marksObtained != null;
+
+      return {
+        id: assignment.id,
+        title: assignment.title,
+        sectionId: assignment.sectionId ?? assignment.section?.id ?? null,
+        sectionTitle: assignment.section?.title ?? null,
+        dueDate: assignment.dueDate,
+        totalMarks: assignment.totalMarks,
+        status,
+        marksObtained: isGraded ? submission?.marksObtained ?? null : null,
+        comments: isGraded ? submission?.comments ?? null : null,
+        submittedAt: submission?.submittedAt ?? null,
+      };
+    });
+
+    const quizRows = quizzes.map((quiz) => {
+      const attempt = latestAttemptByQuizId.get(quiz.id);
+      const isGraded = !!attempt?.gradedAt;
+      const attemptStatus: 'missing' | 'submitted' | 'graded' = !attempt
+        ? 'missing'
+        : isGraded
+          ? 'graded'
+          : 'submitted';
+
+      return {
+        id: quiz.id,
+        title: quiz.title,
+        sectionId: quiz.section_id ?? quiz.section?.id ?? null,
+        sectionTitle: quiz.section?.title ?? null,
+        totalMarks: quiz.totalMarks,
+        attemptId: attempt?.id ?? null,
+        attemptStatus,
+        marksObtained: isGraded ? attempt?.totalMarks ?? null : null,
+        comments: attempt?.comments ?? null,
+        submittedAt: attempt?.submittedAt ?? null,
+        gradedAt: attempt?.gradedAt ?? null,
+      };
+    });
+
+    const assignmentsSummary = this.buildCategorySummary(
+      assignmentRows.map((row) => ({
+        status: row.status,
+        totalMarks: row.totalMarks,
+        marksObtained: row.marksObtained,
+      })),
+    );
+
+    const quizzesSummary = this.buildCategorySummary(
+      quizRows.map((row) => ({
+        status:
+          row.attemptStatus === 'missing'
+            ? 'missing'
+            : row.attemptStatus === 'graded'
+              ? 'graded'
+              : 'submitted',
+        totalMarks: row.totalMarks,
+        marksObtained: row.marksObtained,
+      })),
+    );
+
+    const gradedTotalMarks =
+      assignmentsSummary.gradedTotalMarks + quizzesSummary.gradedTotalMarks;
+    const obtainedMarks =
+      assignmentsSummary.obtainedMarks + quizzesSummary.obtainedMarks;
+    const possibleTotalMarks =
+      assignmentsSummary.possibleTotalMarks + quizzesSummary.possibleTotalMarks;
+
+    return {
+      student: {
+        id: enrollment.student.id,
+        firstName: enrollment.student.firstName,
+        lastName: enrollment.student.lastName,
+        email: enrollment.student.email,
+      },
+      course: {
+        id: enrollment.course.id,
+        courseName: enrollment.course.courseName,
+        coverImg: enrollment.course.coverImg,
+        price: enrollment.course.price,
+      },
+      summary: {
+        assignments: assignmentsSummary,
+        quizzes: quizzesSummary,
+        overall: {
+          obtainedMarks,
+          gradedTotalMarks,
+          possibleTotalMarks,
+          percentage: this.toPercentage(obtainedMarks, gradedTotalMarks),
+          gradedItems: assignmentsSummary.graded + quizzesSummary.graded,
+          totalItems: assignmentsSummary.total + quizzesSummary.total,
+        },
+      },
+      assignments: assignmentRows,
+      quizzes: quizRows,
+    };
+  }
+
+  private buildCategorySummary(
+    rows: {
+      status: string;
+      totalMarks: number | null;
+      marksObtained: number | null;
+    }[],
+  ) {
+    let graded = 0;
+    let submitted = 0;
+    let missing = 0;
+    let obtainedMarks = 0;
+    let gradedTotalMarks = 0;
+    let possibleTotalMarks = 0;
+
+    for (const row of rows) {
+      possibleTotalMarks += Number(row.totalMarks ?? 0);
+
+      if (row.status === 'graded') {
+        graded += 1;
+        obtainedMarks += Number(row.marksObtained ?? 0);
+        gradedTotalMarks += Number(row.totalMarks ?? 0);
+      } else if (row.status === 'missing') {
+        missing += 1;
+      } else {
+        // submitted / late / awaiting grade
+        submitted += 1;
+      }
+    }
+
+    return {
+      total: rows.length,
+      graded,
+      submitted,
+      missing,
+      obtainedMarks,
+      gradedTotalMarks,
+      possibleTotalMarks,
+      percentage: this.toPercentage(obtainedMarks, gradedTotalMarks),
+    };
+  }
+
+  private toPercentage(obtained: number, total: number): number | null {
+    if (!total) return null;
+    return Math.round((obtained / total) * 1000) / 10;
+  }
 }

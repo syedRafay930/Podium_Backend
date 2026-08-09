@@ -89,6 +89,26 @@ class EnrollmentRequestItemDto {
   })
   rejectionReason: string | null;
 
+  @ApiPropertyOptional({
+    description: 'When the enrollment was rejected (used for re-request cooldown)',
+    nullable: true,
+  })
+  rejectedAt: Date | null;
+
+  @ApiProperty({
+    description:
+      'Whether the student can submit a new enrollment request for this course',
+    example: false,
+  })
+  canReapply: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'When the student can re-request after a rejection (null if not rejected or already eligible)',
+    nullable: true,
+  })
+  reapplyAvailableAt: Date | null;
+
   @ApiPropertyOptional({ nullable: true })
   createdAt: Date | null;
 

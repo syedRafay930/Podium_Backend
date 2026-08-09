@@ -12,6 +12,7 @@ import { CourseManagementService } from './course-management.service';
 import { AuthModule } from '../Auth/auth.module';
 import { S3Module } from '../S3/s3.module';
 import { Quizzes } from 'src/Entities/entities/Quizzes';
+import { QuizAttempts } from 'src/Entities/entities/QuizAttempts';
 import { ProgressModule } from 'src/Progress/progress.module';
 import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
 
@@ -29,6 +30,7 @@ import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission
       Lectures,
       Enrollment,
       Quizzes,
+      QuizAttempts,
     ]),
     AuthModule,
     S3Module,

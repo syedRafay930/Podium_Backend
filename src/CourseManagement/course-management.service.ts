@@ -14,6 +14,7 @@ import { Assignment } from 'src/Entities/entities/Assignment';
 import { AssignmentSubmission } from 'src/Entities/entities/AssignmentSubmission';
 import { Lectures } from 'src/Entities/entities/Lectures';
 import { Quizzes } from 'src/Entities/entities/Quizzes';
+import { QuizAttempts } from 'src/Entities/entities/QuizAttempts';
 import { Enrollment } from 'src/Entities/entities/Enrollment';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
@@ -25,6 +26,20 @@ import { ResourceListResponseDto } from 'src/Resources/dto/resource-list-respons
 //import { ResourcesService } from 'src/Resources/resources.service';
 import { S3Helper } from 'src/S3/s3.helper';
 import { ProgressService, ContentCompletionSets } from 'src/Progress/progress.service';
+
+type StudentQuizAttemptInfo = {
+  attemptId: number;
+  attemptStatus: 'submitted' | 'graded';
+  marksObtained: number | null;
+  comments: string | null;
+  submittedAt: Date | null;
+};
+
+type TeacherQuizAttemptStats = {
+  attemptCount: number;
+  ungradedCount: number;
+  gradedCount: number;
+};
 
 @Injectable()
 export class CourseManagementService {
@@ -47,6 +62,8 @@ export class CourseManagementService {
     private readonly enrollmentRepository: Repository<Enrollment>,
     @InjectRepository(Quizzes)
     private readonly quizRepository: Repository<Quizzes>,
+    @InjectRepository(QuizAttempts)
+    private readonly quizAttemptsRepository: Repository<QuizAttempts>,
     private readonly s3Helper: S3Helper,
     private readonly progressService: ProgressService,
     //private readonly resourcesService: ResourcesService,
@@ -145,6 +162,16 @@ export class CourseManagementService {
       order: { createdAt: 'ASC' },
     });
 
+    const [studentQuizAttemptByQuizId, teacherQuizStatsByQuizId] =
+      await Promise.all([
+        roleId === 3
+          ? this.getStudentLatestQuizAttemptsByCourse(userId, courseId)
+          : Promise.resolve(new Map<number, StudentQuizAttemptInfo>()),
+        roleId === 1 || roleId === 2
+          ? this.getTeacherQuizAttemptStatsByCourse(courseId)
+          : Promise.resolve(new Map<number, TeacherQuizAttemptStats>()),
+      ]);
+
     // For each section, fetch assignments, lectures, and resources
     const sectionsWithContent = await Promise.all(
       sections.map(async (section) => {
@@ -182,7 +209,11 @@ export class CourseManagementService {
           assignments,
           lectures,
           resources,
-          quizzes
+          quizzes,
+          null,
+          null,
+          roleId === 3 ? studentQuizAttemptByQuizId : null,
+          roleId === 1 || roleId === 2 ? teacherQuizStatsByQuizId : null,
         );
       }),
     );
@@ -239,6 +270,16 @@ export class CourseManagementService {
       }
     }
 
+    const [studentQuizAttemptByQuizId, teacherQuizStatsByQuizId] =
+      await Promise.all([
+        roleId === 3
+          ? this.getStudentLatestQuizAttemptsByCourse(userId, courseId)
+          : Promise.resolve(new Map<number, StudentQuizAttemptInfo>()),
+        roleId === 1 || roleId === 2
+          ? this.getTeacherQuizAttemptStatsByCourse(courseId)
+          : Promise.resolve(new Map<number, TeacherQuizAttemptStats>()),
+      ]);
+
     const sectionsWithContent = await Promise.all(
       sections.map(async (section) => {
         const quizWhereCondition: any = { section_id: section.id, isDelete: false };
@@ -279,17 +320,122 @@ export class CourseManagementService {
           quizzes,
           completionSets,
           roleId === 3 ? submissionByAssignmentId : null,
+          roleId === 3 ? studentQuizAttemptByQuizId : null,
+          roleId === 1 || roleId === 2 ? teacherQuizStatsByQuizId : null,
         );
       }),
     );
 
+    const ratingValues = (course.courseRatings ?? [])
+      .map((r) => Number(r.rating))
+      .filter((n) => !Number.isNaN(n));
+    const averageRating = ratingValues.length
+      ? Math.round(
+          (ratingValues.reduce((sum, n) => sum + n, 0) / ratingValues.length) *
+            10,
+        ) / 10
+      : 0;
+
+    const safeCourse = {
+      id: course.id,
+      courseName: course.courseName,
+      shortDescription: course.shortDescription,
+      longDescription: course.longDescription,
+      price: course.price,
+      coverImg: course.coverImg,
+      languages: course.languages,
+      isActive: course.isActive,
+      teacherStatus: course.teacherStatus,
+      totalLectures: course.totalLectures,
+      createdAt: course.createdAt,
+      updatedAt: course.updatedAt,
+      averageRating,
+      ratingCount: ratingValues.length,
+      courseCategory: course.courseCategory
+        ? {
+            id: course.courseCategory.id,
+            name: course.courseCategory.name,
+          }
+        : null,
+      teacher: course.teacher
+        ? {
+            id: course.teacher.id,
+            firstName: course.teacher.firstName,
+            lastName: course.teacher.lastName,
+            email: course.teacher.email,
+          }
+        : null,
+    };
+
+    const contentStats = {
+      sectionCount: sectionsWithContent.length,
+      lectureCount: sectionsWithContent.reduce(
+        (sum, s) => sum + (s.lectures?.length ?? 0),
+        0,
+      ),
+      assignmentCount: sectionsWithContent.reduce(
+        (sum, s) => sum + (s.assignments?.length ?? 0),
+        0,
+      ),
+      quizCount: sectionsWithContent.reduce(
+        (sum, s) => sum + (s.quizzes?.length ?? 0),
+        0,
+      ),
+      resourceCount: sectionsWithContent.reduce(
+        (sum, s) => sum + (s.resources?.length ?? 0),
+        0,
+      ),
+    };
+
     const baseResponse = {
-      course,
+      course: safeCourse,
       sections: sectionsWithContent,
     };
 
     // For admin (role_id = 1) and teacher (role_id = 2) - include enrollments
     if (roleId === 1 || roleId === 2) {
+      const mapEnrollment = (e: Enrollment) => ({
+        id: e.id,
+        studentId: e.student?.id,
+        studentName: e.student
+          ? `${e.student.firstName} ${e.student.lastName}`.trim()
+          : null,
+        studentEmail: e.student?.email,
+        status: e.status,
+        isActive: e.isActive,
+        rejectionReason: e.rejectionReason,
+        rejectedAt: e.rejectedAt,
+        enrolledAt: e.createdAt,
+        updatedAt: e.updatedAt,
+      });
+
+      if (roleId === 1) {
+        const allEnrollments = await this.enrollmentRepository.find({
+          where: { courseId },
+          relations: ['student'],
+          order: { createdAt: 'DESC' },
+        });
+
+        const enrolled = allEnrollments.filter((e) => e.status === 'enrolled');
+        const pending = allEnrollments.filter((e) => e.status === 'pending');
+        const rejected = allEnrollments.filter((e) => e.status === 'rejected');
+
+        return {
+          ...baseResponse,
+          stats: {
+            enrolledCount: enrolled.length,
+            pendingCount: pending.length,
+            rejectedCount: rejected.length,
+            totalEnrollments: allEnrollments.length,
+            ...contentStats,
+          },
+          enrollments: enrolled.map(mapEnrollment),
+          pendingEnrollments: pending.map(mapEnrollment),
+          rejectedEnrollments: rejected.map(mapEnrollment),
+          enrollmentCount: enrolled.length,
+        };
+      }
+
       const enrollments = await this.enrollmentRepository.find({
         where: { courseId, status: 'enrolled' },
         relations: ['student'],
@@ -298,15 +444,11 @@ export class CourseManagementService {
 
       return {
         ...baseResponse,
-        enrollments: enrollments.map((e) => ({
-          id: e.id,
-          studentId: e.student?.id,
-          studentName: e.student
-            ? `${e.student.firstName} ${e.student.lastName}`.trim()
-            : null,
-          studentEmail: e.student?.email,
-          enrolledAt: e.createdAt,
-        })),
+        stats: {
+          enrolledCount: enrollments.length,
+          ...contentStats,
+        },
+        enrollments: enrollments.map(mapEnrollment),
         enrollmentCount: enrollments.length,
       };
     }
@@ -439,6 +581,8 @@ export class CourseManagementService {
     quizzes: Quizzes[],
     completionSets: ContentCompletionSets | null = null,
     submissionByAssignmentId: Map<number, AssignmentSubmission> | null = null,
+    studentQuizAttemptByQuizId: Map<number, StudentQuizAttemptInfo> | null = null,
+    teacherQuizStatsByQuizId: Map<number, TeacherQuizAttemptStats> | null = null,
   ): SectionWithContentResponseDto {
     const dto: SectionWithContentResponseDto = {
       id: section.id,
@@ -452,7 +596,14 @@ export class CourseManagementService {
       ),
       lectures: lectures.map((l) => this.mapLectureToDto(l, completionSets)),
       resources: resources.map((r) => this.mapResourceToContentDto(r)),
-      quizzes: quizzes.map((q) => this.mapQuizToDto(q, completionSets)),
+      quizzes: quizzes.map((q) =>
+        this.mapQuizToDto(
+          q,
+          completionSets,
+          studentQuizAttemptByQuizId,
+          teacherQuizStatsByQuizId,
+        ),
+      ),
     };
 
     if (section.createdBy2) {
@@ -584,26 +735,112 @@ export class CourseManagementService {
   private mapQuizToDto(
     quiz: Quizzes,
     completionSets: ContentCompletionSets | null = null,
+    studentQuizAttemptByQuizId: Map<number, StudentQuizAttemptInfo> | null = null,
+    teacherQuizStatsByQuizId: Map<number, TeacherQuizAttemptStats> | null = null,
   ) {
-  return {
-    id: quiz.id,
-    title: quiz.title,
-    description: quiz.description,
-    totalMarks: quiz.totalMarks,
-    startTime: quiz.startTime,
-    endTime: quiz.endTime,
-    isPublished: quiz.isPublished ?? false,
-    createdAt: quiz.createdAt,
-    createdBy: quiz.createdBy
-      ? {
-          id: quiz.createdBy.id,
-          firstName: quiz.createdBy.firstName,
-          lastName: quiz.createdBy.lastName,
-        }
-      : undefined,
-    ...(completionSets
-      ? { isCompleted: completionSets.quizIds.has(quiz.id) }
-      : {}),
-  };
-}
+    const studentAttempt = studentQuizAttemptByQuizId?.get(quiz.id);
+    const teacherStats = teacherQuizStatsByQuizId?.get(quiz.id);
+    const attemptStatus: 'missing' | 'submitted' | 'graded' =
+      studentAttempt?.attemptStatus ?? 'missing';
+
+    return {
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      totalMarks: quiz.totalMarks,
+      startTime: quiz.startTime,
+      endTime: quiz.endTime,
+      isPublished: quiz.isPublished ?? false,
+      createdAt: quiz.createdAt,
+      createdBy: quiz.createdBy
+        ? {
+            id: quiz.createdBy.id,
+            firstName: quiz.createdBy.firstName,
+            lastName: quiz.createdBy.lastName,
+          }
+        : undefined,
+      ...(completionSets
+        ? { isCompleted: completionSets.quizIds.has(quiz.id) }
+        : {}),
+      ...(studentQuizAttemptByQuizId
+        ? {
+            attemptId: studentAttempt?.attemptId ?? null,
+            attemptStatus,
+            marksObtained: studentAttempt?.marksObtained ?? null,
+            comments: studentAttempt?.comments ?? null,
+            submittedAt: studentAttempt?.submittedAt ?? null,
+          }
+        : {}),
+      ...(teacherQuizStatsByQuizId
+        ? {
+            attemptCount: teacherStats?.attemptCount ?? 0,
+            ungradedCount: teacherStats?.ungradedCount ?? 0,
+            gradedCount: teacherStats?.gradedCount ?? 0,
+          }
+        : {}),
+    };
+  }
+
+  private async getStudentLatestQuizAttemptsByCourse(
+    studentId: number,
+    courseId: number,
+  ): Promise<Map<number, StudentQuizAttemptInfo>> {
+    const attempts = await this.quizAttemptsRepository
+      .createQueryBuilder('attempt')
+      .innerJoinAndSelect('attempt.quiz', 'quiz')
+      .where('attempt.student_id = :studentId', { studentId })
+      .andWhere('quiz.course_id = :courseId', { courseId })
+      .andWhere('quiz.is_delete = false')
+      .orderBy('attempt.submittedAt', 'DESC')
+      .addOrderBy('attempt.id', 'DESC')
+      .getMany();
+
+    const map = new Map<number, StudentQuizAttemptInfo>();
+    for (const attempt of attempts) {
+      const quizId = attempt.quiz?.id;
+      if (!quizId || map.has(quizId)) continue;
+
+      const isGraded = !!attempt.gradedAt;
+      map.set(quizId, {
+        attemptId: attempt.id,
+        attemptStatus: isGraded ? 'graded' : 'submitted',
+        marksObtained: isGraded ? attempt.totalMarks : null,
+        comments: attempt.comments,
+        submittedAt: attempt.submittedAt,
+      });
+    }
+    return map;
+  }
+
+  private async getTeacherQuizAttemptStatsByCourse(
+    courseId: number,
+  ): Promise<Map<number, TeacherQuizAttemptStats>> {
+    const rows = await this.quizAttemptsRepository
+      .createQueryBuilder('attempt')
+      .innerJoin('attempt.quiz', 'quiz')
+      .select('quiz.id', 'quizId')
+      .addSelect('COUNT(attempt.id)', 'attemptCount')
+      .addSelect(
+        `SUM(CASE WHEN attempt.gradedAt IS NULL THEN 1 ELSE 0 END)`,
+        'ungradedCount',
+      )
+      .addSelect(
+        `SUM(CASE WHEN attempt.gradedAt IS NOT NULL THEN 1 ELSE 0 END)`,
+        'gradedCount',
+      )
+      .where('quiz.course_id = :courseId', { courseId })
+      .andWhere('quiz.is_delete = false')
+      .groupBy('quiz.id')
+      .getRawMany();
+
+    const map = new Map<number, TeacherQuizAttemptStats>();
+    for (const row of rows) {
+      map.set(Number(row.quizId), {
+        attemptCount: Number(row.attemptCount ?? 0),
+        ungradedCount: Number(row.ungradedCount ?? 0),
+        gradedCount: Number(row.gradedCount ?? 0),
+      });
+    }
+    return map;
+  }
 }
