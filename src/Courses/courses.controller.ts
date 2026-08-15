@@ -104,7 +104,7 @@ export class CourseController {
   @ApiOperation({ 
     summary: 'Get all courses', 
     description:
-      'Get paginated list of courses with optional filters. Students: excludes already-enrolled courses (catalog). Admins: full management list with per-course enrollment counts and list-level stats.',
+      'Get paginated list of courses with optional filters. Students: excludes pending/enrolled/dismissed requests, and rejected courses still inside the 48-hour cooldown. After cooldown, rejected courses appear again so the student can re-apply. Admins: full management list with per-course enrollment counts and list-level stats.',
   })
   @ApiQuery({ 
     name: 'page', 
