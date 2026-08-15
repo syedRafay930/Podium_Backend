@@ -30,7 +30,7 @@ export class AuthService {
       throw new UnauthorizedException('Incorrect email or password');
     }
 
-    if (!user.isActive) {
+    if (user.isActive === false) {
       throw new UnauthorizedException('User is Blocked');
     }
 
@@ -102,7 +102,12 @@ export class AuthService {
 
     await this.redisService.setValue(`forgot:${token}`, user.email, 300); // 5 mins
 
-    const resetLink = `http://localhost:3000/resetpassword/${token}`;
+    const configured = this.configService.get<string>('FRONTEND_URL')?.trim();
+    const frontendUrl =
+      !configured || configured.includes('localhost')
+        ? 'https://www.podium.com.pk'
+        : configured.replace(/\/$/, '');
+    const resetLink = `${frontendUrl}/resetpassword/${token}`;
 
     await this.mailService.sendTemplatedMail(
       email,

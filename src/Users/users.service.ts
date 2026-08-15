@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -58,7 +58,7 @@ export class UsersService {
 
   async findByEmail(email: string): Promise<Users | null> {
     return this.usersRepository.findOne({
-      where: { email: email },
+      where: { email: ILike(email.trim()) },
       relations: ['role'],
     });
   }
@@ -72,15 +72,33 @@ export class UsersService {
 
   async updatePassword(userEmail: string, newPassword: string): Promise<void> {
     const user = await this.usersRepository.findOne({
-      where: { email: userEmail },
+      where: { email: ILike(userEmail.trim()) },
     });
 
     if (user) {
       await this.usersRepository.update(
-        { email: userEmail },
-        { hashedPassword: newPassword, updatedAt: new Date(), updatedBy: user },
+        { id: user.id },
+        {
+          hashedPassword: newPassword,
+          isActive: true,
+          updatedAt: new Date(),
+          updatedBy: user,
+        },
       );
     }
+  }
+
+  private getFrontendBaseUrl(): string {
+    const configured = this.configService.get<string>('FRONTEND_URL')?.trim();
+    if (!configured || configured.includes('localhost')) {
+      return 'https://www.podium.com.pk';
+    }
+    return configured.replace(/\/$/, '');
+  }
+
+  private generateTempPassword(): string {
+    // Starts with a capital letter so frontend password validation passes
+    return `Podium${Date.now().toString(36)}`;
   }
 
   // Helper method to generate password reset token and link
@@ -89,14 +107,13 @@ export class UsersService {
       { sub: email },
       {
         secret: this.configService.get<string>('RESET_SECRET'),
-        expiresIn: '5m',
+        expiresIn: '24h',
       },
     );
 
-    await this.redisService.setValue(`forgot:${token}`, email, 300); // 5 mins
+    await this.redisService.setValue(`forgot:${token}`, email, 86400); // 24 hours
 
-    const resetLink = `http://localhost:3000/resetpassword/${token}`;
-    return resetLink;
+    return `${this.getFrontendBaseUrl()}/resetpassword/${token}`;
   }
 
   // ==================== STUDENT CRUD ====================
@@ -127,7 +144,7 @@ export class UsersService {
     let finalPassword = createStudentDto.password;
     let tempPassword = '';
     if (!finalPassword) {
-      tempPassword = `${Date.now().toString(36)}`;
+      tempPassword = this.generateTempPassword();
       finalPassword = tempPassword;
     }
     const hashedPassword = await bcrypt.hash(finalPassword, 12);
@@ -529,9 +546,11 @@ export class UsersService {
     createTeacherDto: CreateTeacherDto,
     adminId: number,
   ): Promise<Users> {
+    const email = createTeacherDto.email.trim().toLowerCase();
+
     // Check if email already exists
     const existingTeacher = await this.usersRepository.findOne({
-      where: { email: createTeacherDto.email },
+      where: { email: ILike(email) },
     });
 
     if (existingTeacher) {
@@ -547,18 +566,18 @@ export class UsersService {
       throw new NotFoundException('Teacher role not found');
     }
 
-    // Generate temporary password
-    const tempPassword = `${Date.now().toString(36)}`;
+    // Generate temporary password (starts with a capital letter for frontend validation)
+    const tempPassword = this.generateTempPassword();
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
-    // Create teacher
+    // Create teacher — always active so they can log in with the emailed password
     const teacher = this.usersRepository.create({
       firstName: createTeacherDto.firstName,
       lastName: createTeacherDto.lastName,
-      email: createTeacherDto.email,
+      email,
       hashedPassword,
       contactNumber: createTeacherDto.contactNumber || null,
-      isActive: createTeacherDto.isActive ?? true,
+      isActive: true,
       role: teacherRole,
       createdBy: adminId as any,
       createdAt: new Date(),
@@ -568,15 +587,15 @@ export class UsersService {
 
     // Send onboarding email with credentials
     try {
-      const resetLink = await this.generateResetLink(createTeacherDto.email);
+      const resetLink = await this.generateResetLink(email);
       await this.mailService.sendTemplatedMail(
-        createTeacherDto.email,
+        email,
         'Welcome to Podium - Teacher Account Created',
         'user-onboarded',
         {
           userName: `${createTeacherDto.firstName} ${createTeacherDto.lastName}`,
           userRole: 'Teacher',
-          email: createTeacherDto.email,
+          email,
           password: tempPassword,
           resetLink,
         },
