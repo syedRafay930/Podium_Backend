@@ -143,7 +143,7 @@ export class AuthController {
       throw new BadRequestException('User not found');
     }
 
-    if (!user.isActive) {
+    if (user.isActive === false) {
       throw new UnauthorizedException('User is Blocked');
     }
 
