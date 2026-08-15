@@ -152,17 +152,28 @@ export class CourseService {
       query.andWhere('teacher.id = :teacherId', { teacherId });
     }
 
-    // Catalog behavior: hide already-enrolled courses for students only.
-    // Admins need the full management list.
+    // Catalog for students:
+    // - hide pending/enrolled/dismissed (already on enrollment page)
+    // - hide rejected only during 48h cooldown; after that show again so they can re-apply
     if (userId && roleId === 3) {
       query.andWhere(
         `course.id NOT IN (
           SELECT enrollment.course_id
           FROM enrollment
           WHERE enrollment.student_id = :userId
-            AND enrollment.status = :enrolledStatus
+            AND (
+              enrollment.status IN ('pending', 'enrolled', 'dismissed')
+              OR (
+                enrollment.status = 'rejected'
+                AND COALESCE(
+                  enrollment.rejected_at,
+                  enrollment.updated_at,
+                  enrollment.created_at
+                ) > NOW() - INTERVAL '48 hours'
+              )
+            )
         )`,
-        { userId, enrolledStatus: 'enrolled' },
+        { userId },
       );
     }
 
